@@ -60,7 +60,8 @@ def generate_embeddings(path, glove_path):
             embedding_matrix[sentence_list] = sentence_embeddings
 
 #         X = np.array(x)
-        print(embedding_matrix)
+#        print(embedding_matrix)
+        return embedding_matrix
         break #This is just for debugging purpose
         
 def download_data():
@@ -73,10 +74,11 @@ def download_data():
 def main(base_path, glove_path):
     num_courses = 25
     for idx in range(1, num_courses):
-        transcript_path = base_path + str(idx) + "/" + "transcripts/"
-        generate_embeddings(transcript_path, glove_path)
+        embedding = transcript_path = base_path + str(idx) + "/" + "transcripts/"
+        return embedding
 
 if __name__ == "__main__":
     base_path = '/home/anish17281/NLP_Dataset/dataset/'
     glove_path = '../../glove_data/glove.6B.300d.txt'
-    main(base_path, glove_path)
+    embedding = main(base_path, glove_path)
+    return embedding
