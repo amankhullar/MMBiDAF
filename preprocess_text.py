@@ -7,6 +7,7 @@ from nltk.tokenize import sent_tokenize, word_tokenize, TweetTokenizer
 import numpy as np
 import os
 import sys
+import torch
 
 def get_pretrained_model(glove_input_file):
     word2vec_output_file = glove_input_file + '.word2vec'
@@ -74,11 +75,12 @@ def download_data():
 def main(base_path, glove_path):
     num_courses = 25
     for idx in range(1, num_courses):
-        embedding = transcript_path = base_path + str(idx) + "/" + "transcripts/"
+        transcript_path = base_path + str(idx) + "/" + "transcripts/"
+        embedding = generate_embeddings(transcript_path, glove_path)
         return embedding
 
-if __name__ == "__main__":
-    base_path = '/home/anish17281/NLP_Dataset/dataset/'
-    glove_path = '../../glove_data/glove.6B.300d.txt'
-    embedding = main(base_path, glove_path)
-    return embedding
+#if __name__ == "__main__":
+#    base_path = '/home/anish17281/NLP_Dataset/dataset/'
+#    glove_path = '/home/amankhullar/glove_data/glove.6B.300d.txt'
+#    embedding = main(base_path, glove_path)
+#    return embedding
