@@ -6,6 +6,9 @@ __pycache__/
 # C extensions
 *.so
 
+# Out files from Nohup output
+*.out
+
 # Distribution / packaging
 .Python
 build/
