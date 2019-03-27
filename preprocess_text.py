@@ -35,7 +35,7 @@ def document_vector(glove_model, doc):
     doc = [word for word in doc if word in glove_model.vocab]
     return np.mean(glove_model[doc], axis = 0)
 
-def generate_embeddings(path, glove_path):
+def generate_embeddings(path, glove_path, sentence_path):
     num_files = len([item for item in os.listdir(path) if os.path.isfile(os.path.join(path, item)) and '.txt' in item])
     for idx in range(1, num_files):
         lines = []
@@ -50,7 +50,6 @@ def generate_embeddings(path, glove_path):
         doc = preprocess(text, stop_words)
         model = get_model(glove_path)
         
-        x = []
         embedding_matrix = {}
         for sentence in doc:
             single_sentence_embed = document_vector(model, sentence)
@@ -59,11 +58,12 @@ def generate_embeddings(path, glove_path):
             sentence_embeddings = torch.from_numpy(sentence_embeddings)
             sentence_list = " ".join(sentence)
             embedding_matrix[sentence_list] = sentence_embeddings
+        
+        # Save the embedding dictionary for faster loading
+        save_path = sentence_path + str(idx) + '.pt'
+        torch.save(embedding_matrix, save_path)
 
-#         X = np.array(x)
-#        print(embedding_matrix)
-        return embedding_matrix
-        break #This is just for debugging purpose
+
         
 def download_data():
     """
@@ -76,11 +76,11 @@ def main(base_path, glove_path):
     num_courses = 25
     for idx in range(1, num_courses):
         transcript_path = base_path + str(idx) + "/" + "transcripts/"
-        embedding = generate_embeddings(transcript_path, glove_path)
-        return embedding
+        sentence_path = base_path + str(idx) + '/' + 'sentence_features/'
+        os.system('mkdir ' + sentence_path)
+        generate_embeddings(transcript_path, glove_path, sentence_path)
 
-#if __name__ == "__main__":
-#    base_path = '/home/anish17281/NLP_Dataset/dataset/'
-#    glove_path = '/home/amankhullar/glove_data/glove.6B.300d.txt'
-#    embedding = main(base_path, glove_path)
-#    return embedding
+if __name__ == "__main__":
+    base_path = '/home/anish17281/NLP_Dataset/dataset/'
+    glove_path = '/home/amankhullar/glove_data/glove.6B.300d.txt'
+    main(base_path, glove_path)
