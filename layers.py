@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
-from util import masked_softmax
+# from util import masked_softmax
 
 class TextEmbedding(nn.Module):
     """
@@ -286,7 +286,7 @@ class TextImageBiDAFAttention(nn.Module):
 
         # Shapes : (batch_size, text_length, image_length)
         s0 = torch.matmul(text, self.text_weight).expand([-1, -1, image_length])
-        s1 = torch.matmul(image, self.image_weight).transpose(1,2).expand([-1. text_length, -1])
+        s1 = torch.matmul(image, self.image_weight).transpose(1,2).expand([-1, text_length, -1])
         s2 = torch.matmul(text * self.text_image_weight, image.transpose(1,2))
         s = s0 + s1 + s2 + self.bias
 
@@ -351,7 +351,7 @@ class TextAudioBiDAFAttention(nn.Module):
 
         # Shapes : (batch_size, text_length, audio_length)
         s0 = torch.matmul(text, self.text_weight).expand([-1, -1, audio_length])
-        s1 = torch.matmul(audio, self.audio_weight).transpose(1,2).expand([-1. text_length, -1])
+        s1 = torch.matmul(audio, self.audio_weight).transpose(1,2).expand([-1, text_length, -1])
         s2 = torch.matmul(text * self.text_audio_weight, audio.transpose(1,2))
         s = s0 + s1 + s2 + self.bias
 
