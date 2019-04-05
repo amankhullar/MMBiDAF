@@ -8,6 +8,7 @@ import numpy as np
 import os
 import sys
 import torch
+import logging
 
 def get_pretrained_model(glove_input_file):
     word2vec_output_file = glove_input_file + '.word2vec'
@@ -39,30 +40,33 @@ def generate_embeddings(path, glove_path, sentence_path):
     num_files = len([item for item in os.listdir(path) if os.path.isfile(os.path.join(path, item)) and '.txt' in item])
     for idx in range(1, num_files):
         lines = []
-        with open(path + str(idx) + ".txt") as f:
-            for line in f:
-                if re.match('\d+:\d+', line) is None:
-                    line = line.replace('[MUSIC]', '')
-                    lines.append(line.strip())
-        text = ' '.join(lines)
-        
-        stop_words = stopwords.words('english')
-        doc = preprocess(text, stop_words)
-        model = get_model(glove_path)
-        
-        embedding_matrix = {}
-        for sentence in doc:
-            single_sentence_embed = document_vector(model, sentence)
-#             x.append(single_sentence_embed)
-            sentence_embeddings = np.array(single_sentence_embed)
-            sentence_embeddings = torch.from_numpy(sentence_embeddings)
-            sentence_list = " ".join(sentence)
-            embedding_matrix[sentence_list] = sentence_embeddings
-        
-        # Save the embedding dictionary for faster loading
-        save_path = sentence_path + str(idx) + '.pt'
-        torch.save(embedding_matrix, save_path)
-
+        try:
+            with open(path + str(idx) + ".txt") as f:
+                for line in f:
+                    if re.match('\d+:\d+', line) is None:
+                        line = line.replace('[MUSIC]', '')
+                        lines.append(line.strip())
+        except Exception as e:
+            logging.error('Unable to open file. Exception: ' + str(e))
+        else:
+            text = ' '.join(lines)
+            
+            stop_words = stopwords.words('english')
+            doc = preprocess(text, stop_words)
+            model = get_model(glove_path)
+            
+            embedding_matrix = {}
+            for sentence in doc:
+                single_sentence_embed = document_vector(model, sentence)
+    #             x.append(single_sentence_embed)
+                sentence_embeddings = np.array(single_sentence_embed)
+                sentence_embeddings = torch.from_numpy(sentence_embeddings)
+                sentence_list = " ".join(sentence)
+                embedding_matrix[sentence_list] = sentence_embeddings
+            
+            # Save the embedding dictionary for faster loading
+            save_path = sentence_path + str(idx) + '.pt'
+            torch.save(embedding_matrix, save_path)
 
         
 def download_data():
