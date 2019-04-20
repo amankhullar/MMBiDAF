@@ -31,16 +31,19 @@ class ImageDataset(Dataset):
             keyframes = [os.path.join(video_path, img) for img in os.listdir(os.path.join(self.images_dir, video_path)) \
                          if os.path.isfile(os.path.join(self.images_dir, video_path, img))]
             keyframes.sort(key = self.get_num)
-            images.extend(keyframes)
+            images.extend([keyframes])
         return images
 
     def __len__(self):
         return len(os.listdir(self.images_dir))
 
     def __getitem__(self, idx):
-        image_name = os.path.join(self.images_dir, self.images[idx])
-        image = Image.open(image_name)
-        if self.transform is not None:
-            image = self.transform(image)
-        return image
+        transformed_images = []
+        for image_name in self.images[idx]:
+            image_path = os.path.join(self.images_dir, image_name)
+            image = Image.open(image_path)
+            if self.transform is not None:
+                image = self.transform(image)
+            transformed_images.append(image)
+        return transformed_images
 
