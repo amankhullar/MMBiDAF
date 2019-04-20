@@ -18,19 +18,21 @@ class ImageDataset(Dataset):
         """
         self.images_dir = images_dir
         self.transform = transform
-        self.load_images()
+        self.images = self.load_images()
     
     def load_images(self):
+        images = []
         for video_path in os.listdir(self.images_dir):
-            keyframes = [img for img in os.listdir(os.path.join(self.image_dir, video_path) \
-                         if os.path.isfile(os.path.join(self.image_dir, video_path, img))]
-            self.images.extend(keyframes)
+            keyframes = [os.path.join(video_path, img) for img in os.listdir(os.path.join(self.images_dir, video_path)) \
+                         if os.path.isfile(os.path.join(self.images_dir, video_path, img))]
+            images.extend(keyframes)
+        return images
 
     def __len__(self):
-        return len(os.listdir(self.image_dir))
+        return len(os.listdir(self.images_dir))
 
     def __getitem__(self, idx):
-        image_name = os.path.join(self.image_dir, self.images[idx])
+        image_name = os.path.join(self.images_dir, self.images[idx])
         image = Image.open(image_name)
         if self.transform is not None:
             image = self.transform(image)
