@@ -1,6 +1,7 @@
 import torch
 import json
 import os
+import re
 import sys
 from torch.utils.data import Dataset
 from PIL import Image
@@ -18,13 +19,18 @@ class ImageDataset(Dataset):
         """
         self.images_dir = images_dir
         self.transform = transform
+        self.sorted_image_dir = sorted(os.listdir(self.images_dir), key = int)
         self.images = self.load_images()
+
+    def get_num(self, str):
+        return int(re.search(r'\d+', re.search(r'_\d+', str).group()).group())
     
     def load_images(self):
         images = []
-        for video_path in os.listdir(self.images_dir):
+        for video_path in self.sorted_image_dir:
             keyframes = [os.path.join(video_path, img) for img in os.listdir(os.path.join(self.images_dir, video_path)) \
                          if os.path.isfile(os.path.join(self.images_dir, video_path, img))]
+            keyframes.sort(key = self.get_num)
             images.extend(keyframes)
         return images
 
