@@ -18,7 +18,7 @@ import torchvision.transforms as transforms
 from collections import OrderedDict
 from PIL import Image
 from json import dumps
-# from models import MMBiDAF
+from models import MMBiDAF
 from tensorboardX import SummaryWriter
 from tqdm import tqdm
 from ujson import load as json_load
@@ -58,13 +58,14 @@ def main(sent_embedding_path, audio_path, image_dir):
     normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     transform = transforms.Compose([transforms.RandomResizedCrop(256), transforms.RandomHorizontalFlip(), transforms.ToTensor(), normalize,])
     
-    train_loader = torch.utils.data.DataLoader(ImageDataset(image_dir, transform), batch_size = 1, shuffle = True, num_workers = 2)
+    train_loader = torch.utils.data.DataLoader(ImageDataset(image_dir, transform), batch_size = 1, shuffle = False, num_workers = 2)
+
     
     # Get model
     logging.info('Building model')
     model = MMBiDAF(word_vector = word_vectors,
                     audio_vectors = audio_vectors,
-                    image_vectors = image_vectors,
+                    train_loader = train_loader,
                     hidden_size = args.hidden_size,
                     drop_prob = args.drop_prob)
     
