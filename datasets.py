@@ -45,5 +45,5 @@ class ImageDataset(Dataset):
             if self.transform is not None:
                 image = self.transform(image)
             transformed_images.append(image)
-        return transformed_images
+        return torch.stack(transformed_images)
 
