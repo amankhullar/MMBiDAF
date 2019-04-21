@@ -18,13 +18,13 @@ class MMBiDAF(nn.Module):
     
     Args:
         word_vectors (torch.Tensor) : Pre-trained word vectors (GLoVE).
-        image_vectors (torch.Tensor) : Pre-trained image features (VGG).
+        image_vectors (torch.Tensor) : Pre-trained image features (ResNet).
         audio_vectors (torch.Tensor) : Pre-trained audio features (MFCC).
         hidden_size (int) : Number of features in the hidden state at each layer.
         drop_prob (float) : Dropout probability.
     """
 
-    def __init__(self, word_vectors, audio_vectors, image_vectors, hidden_size, drop_prob = 0.):
+    def __init__(self, word_vectors, audio_vectors, hidden_size, drop_prob = 0.):
         super(MMBiDAF, self).__init__()
         self.emb = layers.Embedding(word_vectors = word_vectors,
                                     hidden_size = hidden_size,
@@ -35,5 +35,4 @@ class MMBiDAF(nn.Module):
                                      num_layers = 1,
                                      drop_prob = drop_prob)
 
-        self.
-
+        self.image_enc = layers.ImageEncoder()
