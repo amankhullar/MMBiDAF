@@ -70,7 +70,7 @@ class AudioDataset(Dataset):
     def __len__(self):
         return len(self.audios)
     
-    def __get_item__(self, idx):
+    def __getitem__(self, idx):
         with open(os.path.join(self.audio_dir, self.audios[idx]), 'rb') as fp:
             audio_vectors = pickle.load(fp)
         audio_vectors = np.transpose(audio_vectors)
