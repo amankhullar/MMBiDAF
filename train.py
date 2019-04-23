@@ -62,7 +62,6 @@ def main(sent_embedding_path, audio_path, image_dir):
 
     
     # Get model
-    logging.info('Building model')
     model = MMBiDAF(word_vector = word_vectors,
                     audio_vectors = audio_vectors,
                     train_loader = train_loader,
@@ -72,5 +71,5 @@ def main(sent_embedding_path, audio_path, image_dir):
 if __name__ == '__main__':
     embedding_path = '/home/anish17281/NLP_Dataset/dataset/1/sentence_features/1.pt'
     audio_path = '/home/anish17281/NLP_Dataset/dataset/1/audio-features/1.pkl'
-    image_dir = '/home/anish17281/NLP_Dataset/dataset/1/video_key_frames/1/'
+    image_dir = '/home/anish17281/NLP_Dataset/dataset/1/video_key_frames/'
     main(embedding_path, audio_path, image_dir)
