@@ -1,10 +1,13 @@
-import torch
 import json
 import os
 import re
 import sys
-from torch.utils.data import Dataset
+
+import numpy as np
+import pickle
+import torch
 from PIL import Image
+from torch.utils.data import Dataset
 
 class ImageDataset(Dataset):
     """
@@ -14,7 +17,8 @@ class ImageDataset(Dataset):
         """
         Args:
             images_dir (string) : Directory with all the train images
-                                  for all the vidoes
+                                  for all the videos
+            transform (torchvision.transforms.transforms.Compose) : The required transformation required to normalize all images
             TODO : include all the training data (all modalities) at one place
         """
         self.images_dir = images_dir
@@ -47,3 +51,28 @@ class ImageDataset(Dataset):
             transformed_images.append(image)
         return torch.stack(transformed_images)
 
+class AudioDataset(Dataset):
+    """
+    A PyTorch dataset class to be used in the PyTorch DataLoader to create batches of the Audio.
+    """
+    def __init__(self, audio_dir):
+        """
+        Args:
+            audio_dir (String) : Director containing the MFCC features for all the
+                                 audio in a single course
+        """
+        self.audio_dir = audio_dir
+        self.audios = sorted(os.listdir(self.audio_dir), key = self.get_num)
+
+    def get_num(self, str):
+        return int(re.search(r'\d+',str).group())
+
+    def __len__(self):
+        return len(self.audios)
+    
+    def __get_item__(self, idx):
+        with open(os.path.join(self.audio_dir, self.audios[idx]), 'rb') as fp:
+            audio_vectors = pickle.load(fp)
+        audio_vectors = np.transpose(audio_vectors)
+        audio_vectors = torch.from_numpy(audio_vectors)
+        return audio_vectors
