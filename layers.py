@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
-# from util import masked_softmax
+from util import masked_softmax
 
 class TextEmbedding(nn.Module):
     """
