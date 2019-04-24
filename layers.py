@@ -262,7 +262,7 @@ class TextImageBiDAFAttention(nn.Module):
         s2 = masked_softmax(s, text_mask, dim=1)                        # (batch_size, text_length, image_length)
 
         # (batch_size, text_length, image_length) x (batch_size, image_length, hidden_size) => (batch_size, text_length, hidden_size)
-        a = torch.bmm(s1, text)
+        a = torch.bmm(s1, image)
 
         # (batch_size, text_length, text_length) x (batch_size, text_length, hidden_size) => (batch_size, text_length, hidden_size) 
         b = torch.bmm(torch.bmm(s1, s2.transpose(1,2)), text)
