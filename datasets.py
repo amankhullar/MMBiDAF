@@ -1,13 +1,40 @@
 import json
 import os
+import pickle
 import re
 import sys
 
 import numpy as np
-import pickle
 import torch
 from PIL import Image
 from torch.utils.data import Dataset
+
+
+class TextDataset(Dataset):
+    """
+    A Pytorch dataset class to be used in the Pytorch Dataloader to create text batches
+    """
+    def __init__(self, text_embedding_dir):
+        """
+        Args :
+             text_embedding_dir (string) : The directory containing the embeddings for the preprocessed sentences 
+        """
+        self.text_embedding_dir = text_embedding_dir
+        self.text_embeddings = sorted(os.listdir(self.text_embedding_dir), key = self.get_num)
+
+    def get_num(self, str):
+        return int(re.search(r'\d+', str).group())
+
+    def __len__(self):
+        return len(self.text_embeddings)
+    
+    def __getitem__(self, idx):
+        self.embedding_path = os.path.join(self.text_embedding_dir, self.text_embeddings[idx])
+        self.embedding_dict = torch.load(self.embedding_path)
+        word_vectors = torch.zeros(len(self.embedding_dict),300)
+        for count, sentence in enumerate(self.embedding_dict):
+            word_vectors[count] = self.embedding_dict[sentence]
+        return word_vectors
 
 class ImageDataset(Dataset):
     """
@@ -19,7 +46,6 @@ class ImageDataset(Dataset):
             images_dir (string) : Directory with all the train images
                                   for all the videos
             transform (torchvision.transforms.transforms.Compose) : The required transformation required to normalize all images
-            TODO : include all the training data (all modalities) at one place
         """
         self.images_dir = images_dir
         self.transform = transform
@@ -65,7 +91,7 @@ class AudioDataset(Dataset):
         self.audios = sorted(os.listdir(self.audio_dir), key = self.get_num)
 
     def get_num(self, str):
-        return int(re.search(r'\d+',str).group())
+        return int(re.search(r'\d+', str).group())
 
     def __len__(self):
         return len(self.audios)
