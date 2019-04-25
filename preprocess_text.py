@@ -78,7 +78,7 @@ def download_data():
 
 def main(base_path, glove_path):
     num_courses = 25
-    for idx in range(1, num_courses):
+    for idx in range(7, num_courses):
         transcript_path = base_path + str(idx) + "/" + "transcripts/"
         sentence_path = base_path + str(idx) + '/' + 'sentence_features/'
         os.system('mkdir ' + sentence_path)
