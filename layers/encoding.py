@@ -16,16 +16,14 @@ class TextEmbedding(nn.Module):
         hidden_size (int) : Size of hidden activations.
         drop_prob (float) : Probability of zero-in out activations.
     """
-    def __init__(self, word_vectors, hidden_size, drop_prob):
+    def __init__(self, embedding_size, hidden_size, drop_prob):
         super(TextEmbedding, self).__init__()
         self.drop_prob = drop_prob
-        self.embed = nn.Embedding.from_pretrained(word_vectors)
-        self.proj = nn.Linear(word_vectors.size(1), hidden_size, bias = False)
+        self.proj = nn.Linear(embedding_size, hidden_size, bias = False)
         self.hwy = HighwayEncoder(2, hidden_size)
 
     def forward(self, x):
-        emb = self.embed(x)   # (batch_size, seq_len, embed_size)
-        emb = F.dropout(emb, self.drop_prob, self.training)
+        emb = F.dropout(x, self.drop_prob, self.training)  # (batch_size, seq_len, embed_size)
         emb = self.proj(emb)  # (batch_size, seq_len, hidden_size)
         emb = self.hwy(emb)   # (batch_size, seq_len, hidden_size)
 

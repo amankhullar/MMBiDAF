@@ -1,6 +1,7 @@
 import numpy as np
 import torch
-import layers
+from layers.encoding import *
+from layers.bidaf import *
 import torch.nn as nn
 
 class MMBiDAF(nn.Module):
@@ -24,15 +25,34 @@ class MMBiDAF(nn.Module):
         drop_prob (float) : Dropout probability.
     """
 
-    def __init__(self, word_vectors, audio_vectors, hidden_size, drop_prob = 0.):
+    def __init__(self, text_embedding_size, audio_embedding_size=300, hidden_size, drop_prob = 0.):
         super(MMBiDAF, self).__init__()
-        self.emb = layers.Embedding(word_vectors = word_vectors,
-                                    hidden_size = hidden_size,
-                                    drop_prob = drop_prob)
+        self.emb = TextEmbedding(embedding_size=text_embedding_size,
+                                 hidden_size=hidden_size,
+                                 drop_prob=drop_prob)
         
-        self.enc = layers.RNNEncoder(input_size = hidden_size,
-                                     hidden_size = hidden_size,
-                                     num_layers = 1,
-                                     drop_prob = drop_prob)
+        self.text_enc = RNNEncoder(input_size=hidden_size,
+                                   hidden_size=hidden_size,
+                                   num_layers=1,
+                                   drop_prob=drop_prob)
 
-        self.image_enc = layers.ImageEncoder()
+        self.audio_encoder = RNNEncoder(input_size=audio_embedding_size, 
+                                        hidden_size=hidden_size, 
+                                        num_layers=3, 
+                                        drop_prob=drop_prob)
+
+        self.image_enc = ImageEncoder()
+
+        self.bidaf_attention = BiDAFAttention(2*hidden_size, 
+                                               drop_prob=drop_prob)
+
+        self.text_image_enc = RNNEncoder(input_size=8*hidden_size,
+                                         hidden_size,
+                                         num_layers=2,
+                                         drop_prob=drop_prob)
+
+        self.text_audio_enc = RNNEncoder(input_size=8*hidden_size,
+                                         hidden_size,
+                                         num_layers=2,
+                                         drop_prob=drop_prob)
+
