@@ -24,7 +24,7 @@ class BiDAFAttention(nn.Module):
         hidden_size (int) : Size of hidden activations.
         drop_prob (float) : Probability of zero-ing out activations.
     """
-    def __init__(self, hidden_size, drop_prob = 0.1):
+    def __init__(self, hidden_size, drop_prob=0.1):
         super(BiDAFAttention, self).__init__()
         self.drop_prob = drop_prob
         self.text_weight = nn.Parameter(torch.zeros(hidden_size, 1))
@@ -96,3 +96,22 @@ def masked_softmax(logits, mask, dim=-1, log_softmax=False):
     probs = softmax_fn(masked_logits, dim)
 
     return probs
+
+class MultimodalAttention(nn.Module):
+    """
+    Used to calculate the hierarchical attention of the image/audio aware text vectors
+    The code is inspired from the PyTorch tutorials : 
+    https://pytorch.org/tutorials/intermediate/seq2seq_translation_tutorial.html
+    Args:
+        hidden_size (int) : The hidden size of the input features
+    """
+    def __init__(self, hidden_size, max_text_length, drop_prob=0.1):
+        super(MultimodalAttention, self).__init__()
+        self.hidden_size = hidden_size
+        self.drop_prob = drop_prob
+        self.max_text_length = max_text_length
+        self.att = nn.Linear(self.hidden_size * 8, self.max_text_length)
+        
+    def forward(self, modality_aware_text, input, hidden):
+        attention_weights = F.softmax(self.att(torch.cat((input[0], hidden[0]), 1)), dim=1)
+        attention_applied = torch.bmm(attention_weights,unsqueeze(0), modality_aware_text.unsqueeze(0))
