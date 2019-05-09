@@ -14,22 +14,39 @@ class TextDataset(Dataset):
     """
     A Pytorch dataset class to be used in the Pytorch Dataloader to create text batches
     """
-    def __init__(self, text_embedding_dir):
+    def __init__(self, courses_dir):
         """
         Args :
-             text_embedding_dir (string) : The directory containing the embeddings for the preprocessed sentences 
+             courses_dir (string) : The directory containing the embeddings for the preprocessed sentences 
         """
-        self.text_embedding_dir = text_embedding_dir
-        self.text_embeddings = sorted(os.listdir(self.text_embedding_dir), key = self.get_num)
+        self.courses_dir = courses_dir
+        # self.text_embeddings_path = sorted(os.listdir(self.courses_dir), key = self.get_num)
+        self.text_embeddings_path = self.load_sentence_embeddings_path()
+
+    def load_sentence_embeddings_path(self):
+        transcript_embeddings = []
+
+        # Get sorted list of all courses (excluding any files)
+        dirlist = []
+        for fname in os.listdir(self.courses_dir):
+            if os.path.isdir(os.path.join(self.courses_dir, fname)):
+                dirlist.append(fname)
+        
+        for course_number in sorted(dirlist, key=int):
+            course_transcript_path = os.path.join(self.courses_dir, course_number, 'sentence_features/')
+            text_embedding_path = [self.courses_dir + course_number + '/' + transcript_path for transcript_path in sorted(os.listdir(course_transcript_path), key=self.get_num))]
+            transcript_embeddings.append(text_embedding_path)
+
+        return [val for sublist in transcript_embeddings for val in sublist] #Flatten the list of lists
 
     def get_num(self, str):
         return int(re.search(r'\d+', str).group())
 
     def __len__(self):
-        return len(self.text_embeddings)
+        return len(self.text_embeddings_path)
     
     def __getitem__(self, idx):
-        self.embedding_path = os.path.join(self.text_embedding_dir, self.text_embeddings[idx])
+        self.embedding_path = self.text_embeddings_path[idx]
         self.embedding_dict = torch.load(self.embedding_path)
         word_vectors = torch.zeros(len(self.embedding_dict),300)
         for count, sentence in enumerate(self.embedding_dict):
