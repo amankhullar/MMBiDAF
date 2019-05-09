@@ -20,7 +20,6 @@ class TextDataset(Dataset):
              courses_dir (string) : The directory containing the embeddings for the preprocessed sentences 
         """
         self.courses_dir = courses_dir
-        # self.text_embeddings_path = sorted(os.listdir(self.courses_dir), key = self.get_num)
         self.text_embeddings_path = self.load_sentence_embeddings_path()
 
     def load_sentence_embeddings_path(self):
@@ -37,7 +36,7 @@ class TextDataset(Dataset):
             text_embedding_path = [self.courses_dir + course_number + '/sentence_features/' + transcript_path for transcript_path in sorted(os.listdir(course_transcript_path), key=self.get_num)]
             transcript_embeddings.append(text_embedding_path)
 
-        return [val for sublist in transcript_embeddings for val in sublist] #Flatten the list of lists
+        return [val for sublist in transcript_embeddings for val in sublist]    #Flatten the list of lists
 
     def get_num(self, str):
         return int(re.search(r'\d+', str).group())
@@ -115,23 +114,40 @@ class AudioDataset(Dataset):
     """
     A PyTorch dataset class to be used in the PyTorch DataLoader to create batches of the Audio.
     """
-    def __init__(self, audio_dir):
+    def __init__(self, courses_dir):
         """
         Args:
-            audio_dir (String) : Director containing the MFCC features for all the
+            courses_dir (String) : Director containing the MFCC features for all the
                                  audio in a single course
         """
-        self.audio_dir = audio_dir
-        self.audios = sorted(os.listdir(self.audio_dir), key = self.get_num)
+        self.courses_dir = courses_dir
+        # self.audios_paths = sorted(os.listdir(self.courses_dir), key = self.get_num)
+        self.audios_paths = self.load_audio_path()
+
+    def load_audio_path(self):
+        audio_embeddings = []
+
+        # Get sorted list of all courses (excluding any files)
+        dirlist = []
+        for fname in os.listdir(self.courses_dir):
+            if os.path.isdir(os.path.join(self.courses_dir, fname)):
+                dirlist.append(fname)
+        
+        for course_number in sorted(dirlist, key=int):
+            course_audio_path = os.path.join(self.courses_dir, course_number, 'audio-features/')
+            audio_embedding_path = [self.courses_dir + course_number + '/audio-features/' + audio_path for audio_path in sorted(os.listdir(course_audio_path), key=self.get_num)]
+            audio_embeddings.append(audio_embedding_path)
+
+        return [val for sublist in audio_embeddings for val in sublist]     #Flatten the list of lists
 
     def get_num(self, str):
         return int(re.search(r'\d+', str).group())
 
     def __len__(self):
-        return len(self.audios)
+        return len(self.audios_paths)
     
     def __getitem__(self, idx):
-        with open(os.path.join(self.audio_dir, self.audios[idx]), 'rb') as fp:
+        with open(self.audios_paths[idx], 'rb') as fp:
             audio_vectors = pickle.load(fp)
         audio_vectors = np.transpose(audio_vectors)
         audio_vectors = torch.from_numpy(audio_vectors)
