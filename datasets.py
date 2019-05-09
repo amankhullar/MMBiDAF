@@ -34,7 +34,7 @@ class TextDataset(Dataset):
         
         for course_number in sorted(dirlist, key=int):
             course_transcript_path = os.path.join(self.courses_dir, course_number, 'sentence_features/')
-            text_embedding_path = [self.courses_dir + course_number + '/' + transcript_path for transcript_path in sorted(os.listdir(course_transcript_path), key=self.get_num))]
+            text_embedding_path = [self.courses_dir + course_number + '/sentence_features/' + transcript_path for transcript_path in sorted(os.listdir(course_transcript_path), key=self.get_num)]
             transcript_embeddings.append(text_embedding_path)
 
         return [val for sublist in transcript_embeddings for val in sublist] #Flatten the list of lists
