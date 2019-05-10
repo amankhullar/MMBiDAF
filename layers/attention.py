@@ -110,8 +110,19 @@ class MultimodalAttention(nn.Module):
         self.hidden_size = hidden_size
         self.drop_prob = drop_prob
         self.max_text_length = max_text_length
-        self.att = nn.Linear(self.hidden_size * 8, self.max_text_length)
-        
-    def forward(self, modality_aware_text, input, hidden):
-        attention_weights = F.softmax(self.att(torch.cat((input[0], hidden[0]), 1)), dim=1)
-        attention_applied = torch.bmm(attention_weights,unsqueeze(0), modality_aware_text.unsqueeze(0))
+        self.att_audio = nn.Linear(self.hidden_size * 8, self.max_text_length)
+        self.att_img = nn.Linear(self.hidden_size * 8, self.max_text_length)
+        self.att_mm = nn.Linear(self.hidden_size * 8, self.max_text_length)
+
+
+    def forward(self, audio_aware_text, image_aware_text, hidden):
+        attention_weights_audio = F.softmax(self.att_audio(torch.cat((audio_aware_text[0], hidden[0]), 1)), dim=1)
+        attention_applied_audio = torch.bmm(attention_weights_audio.unsqueeze(0), audio_aware_text.unsqueeze(0))
+
+        attention_weights_img = F.softmax(self.att_img(torch.cat((image_aware_text[0], hidden[0]), 1)), dim=1)
+        attention_applied_img = torch.bmm(attention_weights_img.unsqueeze(0), image_aware_text.unsqueeze(0))
+
+        attention_weights_mm = F.softmax(self.att_audio(torch.cat((attention_applied_audio, attention_applied_img, hidden[0]), 1)), dim=1)
+        attention_applied_mm = torch.bmm(attention_weights_mm.unsqueeze(0), torch.cat((attention_applied_audio, attention_applied_img), 0).unsqueeze(0))
+
+        return attention_applied_mm
