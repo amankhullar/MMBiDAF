@@ -58,10 +58,15 @@ class MMBiDAF(nn.Module):
         self.bidaf_att_image = BiDAFAttention(2*hidden_size, 
                                               drop_prob=drop_prob)
 
-        self.mod = RNNEncoder(input_size=8*hidden_size,
-                              hidden_size=hidden_size,
-                              num_layers=2,
-                              drop_prob=drop_prob)
+        self.mod_t_a = RNNEncoder(input_size=8*hidden_size,
+                                         hidden_size=hidden_size,
+                                         num_layers=2,
+                                         drop_prob=drop_prob)
+
+        self.mod_t_i = RNNEncoder(input_size=8*hidden_size,
+                                         hidden_size=hidden_size,
+                                         num_layers=2,
+                                         drop_prob=drop_prob)
 
         self.multimodal_att_decoder = MultimodalAttentionDecoder(hidden_size,
                                                                  max_text_length,
@@ -94,8 +99,8 @@ class MMBiDAF(nn.Module):
         text_audio_att = self.bidaf_att_audio(text_encoded, audio_encoded, text_mask, audio_mask)   # (batch_size, num_sentences, 8 * hidden_size)
         text_image_att = self.bidaf_att_image(text_encoded, image_encoded, text_mask, image_mask)   # (batch_size, num_sentences, 8 * hidden_size)
 
-        mod_text_audio = self.mod(text_audio_att, original_text_lengths)                            # (batch_size, num_sentences, 2 * hidden_size)
-        mod_text_image = self.mod(text_image_att, original_text_lengths)                            # (batch_size, num_sentences, 2 * hidden_size)
+        mod_text_audio = self.mod_t_a(text_audio_att, original_text_lengths)                            # (batch_size, num_sentences, 2 * hidden_size)
+        mod_text_image = self.mod_t_i(text_image_att, original_text_lengths)                            # (batch_size, num_sentences, 2 * hidden_size)
 
         if hidden_gru is None:
             mm_att, hidden_gru = self.multimodal_att_decoder(text_audio_att, text_image_att)
