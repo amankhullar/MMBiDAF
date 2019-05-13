@@ -41,6 +41,7 @@ class MMBiDAF(nn.Module):
                                         num_layers=3, 
                                         drop_prob=drop_prob)
 
+        # TODO: Add RNN on top of image embedding keyframe sequences
         self.image_enc = ImageEncoder()
 
         self.bidaf_att_audio = BiDAFAttention(2*hidden_size, 
@@ -58,7 +59,7 @@ class MMBiDAF(nn.Module):
                                                   max_text_length,
                                                   drop_prob)
 
-    def forward(self, embedded_text, original_text_lengths, audio_emb, original_audio_lengths, image_emb):
+    def forward(self, embedded_text, original_text_lengths, audio_emb, original_audio_lengths, image_emb, original_image_lengths, hidden_gru=None):
         text_emb = self.emb(embedded_text)
         text_encoded = self.text_enc(text_emb, original_text_lengths)
 
@@ -78,5 +79,10 @@ class MMBiDAF(nn.Module):
         text_audio_att = self.bidaf_att_audio(text_encoded, audio_encoded, text_mask, audio_mask)
         text_image_att = self.bidaf_att_image(text_encoded, image_encoded, text_mask, image_mask)
 
-        mm_att = self.multimodal_att_decoder(text_audio_att, text_image_att, )
+        if hidden_gru is None:
+            mm_att, hidden_gru = self.multimodal_att_decoder(text_audio_att, text_image_att)
+        else:
+            mm_att, hidden_gru = self.multimodal_att_decoder(text_audio_att, text_image_att, hidden_gru)
+
+        return mm_att, hidden_gru
 
