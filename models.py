@@ -50,7 +50,7 @@ class MMBiDAF(nn.Module):
                                     num_layers=1,
                                     drop_prob=drop_prob)
 
-        self.image_keyframes_emb = ImageEmbedding()                  # Using the default encoded image size
+        self.image_keyframes_emb = ImageEmbedding(encoded_image_size=2)
 
         self.bidaf_att_audio = BiDAFAttention(2*hidden_size, 
                                               drop_prob=drop_prob)
@@ -68,7 +68,6 @@ class MMBiDAF(nn.Module):
                                                                  drop_prob)
 
 
-
     def forward(self, embedded_text, original_text_lengths, embedded_audio, original_audio_lengths, transformed_images, original_image_lengths, hidden_gru=None):
         text_emb = self.emb(embedded_text)                                                          # (batch_size, num_sentences, hidden_size)
         text_encoded = self.text_enc(text_emb, original_text_lengths)                               # (batch_size, num_sentences, 2 * hidden_size)
@@ -77,9 +76,10 @@ class MMBiDAF(nn.Module):
         audio_encoded = self.audio_enc(audio_emb, original_audio_lengths)                           # (batch_size, num_audio_envelopes, 2 * hidden_size)
 
         original_image_size = transformed_images.size()                                             # (batch_size, num_keyframes, num_channels, transformed_image_size, transformed_image_size)
-        image_emb = torch.reshape(transformed_images, (-1, transformed_images.size(2), transformed_images.size(3), transformed_images.size(4)))    # (batch_size * num_keyframes, num_channels, transformed_image_size, transformed_image_size)
-        image_emb = self.image_keyframes_emb(image_emb)                                             # (batch_size * num_keyframes, encoded_image_size, encoded_image_size, 2048)
-        image_emb = torch.reshape(image_emb, (image_emb.size(0), -1))                               # (batch_size * num_keyframes, encoded_image* encoded_image * 2048)
+        # Combine images across videos in a batch into a single dimension to be embedded by ResNet
+        transformed_images = torch.reshape(transformed_images, (-1, transformed_images.size(2), transformed_images.size(3), transformed_images.size(4)))    # (batch_size * num_keyframes, num_channels, transformed_image_size, transformed_image_size)
+        image_emb = self.image_keyframes_emb(transformed_images)                                    # (batch_size * num_keyframes, encoded_image_size, encoded_image_size, 2048)
+        image_emb = torch.reshape(image_emb, (image_emb.size(0), -1))                               # (batch_size * num_keyframes, encoded_image_size * encoded_image_size * 2048)
         image_linear_layer = nn.Linear(image_emb.size(-1), 300)                                     # Linear layer for linear transformation
         image_emb = image_linear_layer(image_emb)                                                   # (batch_size * num_keyframes, 300)
         image_emb = torch.reshape(image_emb, (original_image_size[0], original_image_size[1], -1))  # (batch_size, num_keyframes, 300)
@@ -103,4 +103,3 @@ class MMBiDAF(nn.Module):
             mm_att, hidden_gru = self.multimodal_att_decoder(text_audio_att, text_image_att, hidden_gru)
 
         return mm_att, hidden_gru
-
