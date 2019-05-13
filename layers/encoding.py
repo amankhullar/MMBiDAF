@@ -6,7 +6,7 @@ import torch.nn.functional as F
 
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
-class TextEmbedding(nn.Module):
+class Embedding(nn.Module):
     """
     Text Embedding layer used by MMBiDAF.
     This implementation is based on the BiDAF implementation by Chris Chute.
@@ -17,7 +17,7 @@ class TextEmbedding(nn.Module):
         drop_prob (float) : Probability of zero-in out activations.
     """
     def __init__(self, embedding_size, hidden_size, drop_prob):
-        super(TextEmbedding, self).__init__()
+        super(Embedding, self).__init__()
         self.drop_prob = drop_prob
         self.proj = nn.Linear(embedding_size, hidden_size, bias = False)
         self.hwy = HighwayEncoder(2, hidden_size)
