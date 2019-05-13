@@ -25,7 +25,7 @@ class MMBiDAF(nn.Module):
         drop_prob (float) : Dropout probability.
     """
 
-    def __init__(self, text_embedding_size=300, audio_embedding_size=300, hidden_size, drop_prob = 0.):
+    def __init__(self, hidden_size, text_embedding_size=300, audio_embedding_size=300, drop_prob=0., max_text_length=48):
         super(MMBiDAF, self).__init__()
         self.emb = TextEmbedding(embedding_size=text_embedding_size,
                                  hidden_size=hidden_size,
@@ -43,18 +43,20 @@ class MMBiDAF(nn.Module):
 
         self.image_enc = ImageEncoder()
 
-        self.bidaf_attention = BiDAFAttention(2*hidden_size, 
+        self.bidaf_att_audio = BiDAFAttention(2*hidden_size, 
                                                drop_prob=drop_prob)
 
-        self.text_image_enc = RNNEncoder(input_size=8*hidden_size,
+        self.bidaf_att_image = BiDAFAttention(2*hidden_size, 
+                                               drop_prob=drop_prob)
+
+        self.final_enc = RNNEncoder(input_size=8*hidden_size,
                                          hidden_size,
                                          num_layers=2,
                                          drop_prob=drop_prob)
 
-        self.text_audio_enc = RNNEncoder(input_size=8*hidden_size,
-                                         hidden_size,
-                                         num_layers=2,
-                                         drop_prob=drop_prob)
+        self.multimodal_att = MultimodalAttention(hidden_size,
+                                                  max_text_length,
+                                                  drop_prob)
 
     def forward(self, embedded_text, original_text_lengths, audio_emb, original_audio_lengths, image_emb):
         text_emb = self.emb(embedded_text)
@@ -67,6 +69,14 @@ class MMBiDAF(nn.Module):
         image_encoded = torch.reshape(image_encoded, (image_encoded.size(0), -1))
         image_linear_layer = nn.Linear(image_encoded.size(-1), 300)
         image_encoded = image_linear_layer(image_encoded)
+
+        # TODO: This will only work for batch_size = 1. Add support for larger batches
+        text_mask = torch.ones(1, embedded_text.size(1))
+        audio_mask = torch.ones(1, audio_emb.size(1))
+        image_mask = torch.ones(1, image_emb.size(1))
+
+        text_audio_att = self.bidaf_att_audio(embedded_text, audio_emb, text_mask, audio_mask)
+        text_image_att = self.bidaf_att_image(embedded_text, image_emb, text_mask, image_mask)
 
         
 
