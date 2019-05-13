@@ -103,7 +103,7 @@ class RNNEncoder(nn.Module):
         return x
 
 
-class ImageEncoder(nn.Module):
+class ImageEmbedding(nn.Module):
     """
     This is the encoder layer for the images.
 
@@ -113,7 +113,7 @@ class ImageEncoder(nn.Module):
     This is from the paper Show, Attend and Tell.
     """
     def __init__(self, encoded_image_size = 14):
-        super(ImageEncoder, self).__init__()
+        super(ImageEmbedding, self).__init__()
         self.enc_image_size = encoded_image_size
 
         # I have used ResNet to extract the features, I could probably experiment with VGG
