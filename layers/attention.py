@@ -97,7 +97,7 @@ def masked_softmax(logits, mask, dim=-1, log_softmax=False):
 
     return probs
 
-class MultimodalAttention(nn.Module):
+class MultimodalAttentionDecoder(nn.Module):
     """
     Used to calculate the hierarchical attention of the image/audio aware text vectors
     The code is inspired from the PyTorch tutorials : 
@@ -106,23 +106,29 @@ class MultimodalAttention(nn.Module):
         hidden_size (int) : The hidden size of the input features
     """
     def __init__(self, hidden_size, max_text_length, drop_prob=0.1):
-        super(MultimodalAttention, self).__init__()
+        super(MultimodalAttentionDecoder, self).__init__()
         self.hidden_size = hidden_size
         self.drop_prob = drop_prob
         self.max_text_length = max_text_length
+        self.gru = nn.GRU(hidden_size * 8, hidden_size)
         self.att_audio = nn.Linear(self.hidden_size * 8, self.max_text_length)
         self.att_img = nn.Linear(self.hidden_size * 8, self.max_text_length)
         self.att_mm = nn.Linear(self.hidden_size * 8, self.max_text_length)
 
 
-    def forward(self, audio_aware_text, image_aware_text, hidden):
-        attention_weights_audio = F.softmax(self.att_audio(torch.cat((audio_aware_text[0], hidden[0]), 1)), dim=1)
+    def forward(self, audio_aware_text, image_aware_text, hidden_gru):
+        attention_weights_audio = F.softmax(self.att_audio(torch.cat((audio_aware_text[0], hidden_gru[0]), 1)), dim=1)
         attention_applied_audio = torch.bmm(attention_weights_audio.unsqueeze(0), audio_aware_text.unsqueeze(0))
 
-        attention_weights_img = F.softmax(self.att_img(torch.cat((image_aware_text[0], hidden[0]), 1)), dim=1)
+        attention_weights_img = F.softmax(self.att_img(torch.cat((image_aware_text[0], hidden_gru[0]), 1)), dim=1)
         attention_applied_img = torch.bmm(attention_weights_img.unsqueeze(0), image_aware_text.unsqueeze(0))
 
-        attention_weights_mm = F.softmax(self.att_audio(torch.cat((attention_applied_audio, attention_applied_img, hidden[0]), 1)), dim=1)
+        attention_weights_mm = F.softmax(self.att_audio(torch.cat((attention_applied_audio, attention_applied_img, hidden_gru[0]), 1)), dim=1)
         attention_applied_mm = torch.bmm(attention_weights_mm.unsqueeze(0), torch.cat((attention_applied_audio, attention_applied_img), 0).unsqueeze(0))
 
-        return attention_applied_mm
+        output, hidden_gru = self.gru(attention_applied_mm, hidden_gru)
+        
+        return output, hidden_gru
+
+    def initHidden(self):
+        return torch.zeros(1, 1, self.hidden_size)
