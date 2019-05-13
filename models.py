@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 from layers.encoding import *
-from layers.bidaf import *
+from layers.attention import *
 import torch.nn as nn
 
 class MMBiDAF(nn.Module):
@@ -50,11 +50,11 @@ class MMBiDAF(nn.Module):
                                                drop_prob=drop_prob)
 
         self.final_enc = RNNEncoder(input_size=8*hidden_size,
-                                         hidden_size,
-                                         num_layers=2,
-                                         drop_prob=drop_prob)
+                                    hidden_size=hidden_size,
+                                    num_layers=2,
+                                    drop_prob=drop_prob)
 
-        self.multimodal_att = MultimodalAttention(hidden_size,
+        self.multimodal_att_decoder = MultimodalAttentionDecoder(hidden_size,
                                                   max_text_length,
                                                   drop_prob)
 
@@ -75,8 +75,8 @@ class MMBiDAF(nn.Module):
         audio_mask = torch.ones(1, audio_emb.size(1))
         image_mask = torch.ones(1, image_emb.size(1))
 
-        text_audio_att = self.bidaf_att_audio(embedded_text, audio_emb, text_mask, audio_mask)
-        text_image_att = self.bidaf_att_image(embedded_text, image_emb, text_mask, image_mask)
+        text_audio_att = self.bidaf_att_audio(text_encoded, audio_encoded, text_mask, audio_mask)
+        text_image_att = self.bidaf_att_image(text_encoded, image_encoded, text_mask, image_mask)
 
-        
+        mm_att = self.multimodal_att_decoder(text_audio_att, text_image_att, )
 
