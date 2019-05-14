@@ -51,7 +51,14 @@ def main(course_dir, text_embedding_size, audio_embedding_size, hidden_size, dro
 
     for batch_text, batch_audio, batch_images in zip(train_text_loader, train_audio_loader, train_image_loader):
         optimizer.zero_grad()
+        
+        hidden_state, sentence_dist = model(batch_text, batch_text.size(1), batch_audio, batch_audio.size(1), batch_images, batch_images.size(1))
 
+        print(hidden_state.size())
+        print(hidden_state)
+        print(sentence_dist.size())
+        print(sentence_dist)
+        break
         # Forward
         # log_p1, log_p2 = model(cw_idxs, qw_idxs)
         # y1, y2 = y1.to(device), y2.to(device)

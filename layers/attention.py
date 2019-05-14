@@ -127,12 +127,11 @@ class MultimodalAttentionDecoder(nn.Module):
         attention_applied_mm = torch.bmm(attention_weights_mm.unsqueeze(0), torch.cat((attention_applied_audio, attention_applied_img), 0).unsqueeze(0))
 
         final_attention_weights = attention_weights_mm[0]*attention_weights_audio + attention_weights_mm[1]*attention_weights_img
-
-        output, hidden_gru = self.gru(attention_applied_mm, hidden_gru)
+        _, hidden_gru = self.gru(attention_applied_mm, hidden_gru)
 
         # TODO: Apply softmax over decoder output to get probability distribution?
         
-        return output, hidden_gru, final_attention_weights
+        return hidden_gru, final_attention_weights
 
     def initHidden(self):
         return torch.zeros(1, 1, self.hidden_size)
