@@ -92,19 +92,19 @@ class MMBiDAF(nn.Module):
         image_encoded = self.image_enc(image_emb, original_image_lengths)                           # (batch_size, num_keyframes, 2 * hidden_size)
 
         # TODO: This will only work for batch_size = 1. Add support for larger batches
-        text_mask = torch.ones(1, embedded_text.size(1))
-        audio_mask = torch.ones(1, embedded_audio.size(1))
-        image_mask = torch.ones(1, transformed_images.size(1))
+        text_mask = torch.ones(1, embedded_text.size(1))                                            # (batch_size, padded_seq_length)
+        audio_mask = torch.ones(1, embedded_audio.size(1))                                          # (batch_size, padded_seq_length)
+        image_mask = torch.ones(1, transformed_images.size(1))                                      # (batch_size, padded_seq_length)
 
         text_audio_att = self.bidaf_att_audio(text_encoded, audio_encoded, text_mask, audio_mask)   # (batch_size, num_sentences, 8 * hidden_size)
         text_image_att = self.bidaf_att_image(text_encoded, image_encoded, text_mask, image_mask)   # (batch_size, num_sentences, 8 * hidden_size)
 
-        mod_text_audio = self.mod_t_a(text_audio_att, original_text_lengths)                            # (batch_size, num_sentences, 2 * hidden_size)
-        mod_text_image = self.mod_t_i(text_image_att, original_text_lengths)                            # (batch_size, num_sentences, 2 * hidden_size)
+        mod_text_audio = self.mod_t_a(text_audio_att, original_text_lengths)                        # (batch_size, num_sentences, 2 * hidden_size)
+        mod_text_image = self.mod_t_i(text_image_att, original_text_lengths)                        # (batch_size, num_sentences, 2 * hidden_size)
 
         if hidden_gru is None:
-            mm_att, hidden_gru = self.multimodal_att_decoder(text_audio_att, text_image_att)
+            mm_att, hidden_gru = self.multimodal_att_decoder(mod_text_audio, mod_text_image)        # (batch_size, num_sentences, )
         else:
-            mm_att, hidden_gru = self.multimodal_att_decoder(text_audio_att, text_image_att, hidden_gru)
+            mm_att, hidden_gru = self.multimodal_att_decoder(mod_text_audio, mod_text_image, hidden_gru)
 
         return mm_att, hidden_gru

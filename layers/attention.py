@@ -110,10 +110,10 @@ class MultimodalAttentionDecoder(nn.Module):
         self.hidden_size = hidden_size
         self.drop_prob = drop_prob
         self.max_text_length = max_text_length
-        self.gru = nn.GRU(hidden_size * 8, hidden_size)
-        self.att_audio = nn.Linear(self.hidden_size * 8, self.max_text_length)
-        self.att_img = nn.Linear(self.hidden_size * 8, self.max_text_length)
-        self.att_mm = nn.Linear(self.hidden_size * 8, self.max_text_length)
+        self.gru = nn.GRU(hidden_size * 2, hidden_size)
+        self.att_audio = nn.Linear(self.hidden_size * 2, self.max_text_length)
+        self.att_img = nn.Linear(self.hidden_size * 2, self.max_text_length)
+        self.att_mm = nn.Linear(self.hidden_size * 2, self.max_text_length)
 
 
     def forward(self, audio_aware_text, image_aware_text, hidden_gru):
@@ -123,12 +123,16 @@ class MultimodalAttentionDecoder(nn.Module):
         attention_weights_img = F.softmax(self.att_img(torch.cat((image_aware_text[0], hidden_gru[0]), 1)), dim=1)
         attention_applied_img = torch.bmm(attention_weights_img.unsqueeze(0), image_aware_text.unsqueeze(0))
 
-        attention_weights_mm = F.softmax(self.att_audio(torch.cat((attention_applied_audio, attention_applied_img, hidden_gru[0]), 1)), dim=1)
+        attention_weights_mm = F.softmax(self.att_mm(torch.cat((attention_applied_audio, attention_applied_img, hidden_gru[0]), 1)), dim=1)
         attention_applied_mm = torch.bmm(attention_weights_mm.unsqueeze(0), torch.cat((attention_applied_audio, attention_applied_img), 0).unsqueeze(0))
 
+        final_attention_weights = attention_weights_mm[0]*attention_weights_audio + attention_weights_mm[1]*attention_weights_img
+
         output, hidden_gru = self.gru(attention_applied_mm, hidden_gru)
+
+        # TODO: Apply softmax over decoder output to get probability distribution?
         
-        return output, hidden_gru
+        return output, hidden_gru, final_attention_weights
 
     def initHidden(self):
         return torch.zeros(1, 1, self.hidden_size)
