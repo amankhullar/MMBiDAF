@@ -25,9 +25,9 @@ class MMBiDAF(nn.Module):
         drop_prob (float) : Dropout probability.
     """
 
-    def __init__(self, hidden_size, audio_embedding_size, embedding_size=300, drop_prob=0., max_text_length=48):
+    def __init__(self, hidden_size, text_embedding_size, audio_embedding_size, drop_prob=0., max_text_length=48):
         super(MMBiDAF, self).__init__()
-        self.emb = Embedding(embedding_size=embedding_size,
+        self.emb = Embedding(embedding_size=text_embedding_size,
                              hidden_size=hidden_size,
                              drop_prob=drop_prob)
         
@@ -80,21 +80,21 @@ class MMBiDAF(nn.Module):
         audio_emb = self.a_emb(embedded_audio)                                                      # (batch_size, num_audio_envelopes, hidden_size)
         audio_encoded = self.audio_enc(audio_emb, original_audio_lengths)                           # (batch_size, num_audio_envelopes, 2 * hidden_size)
 
-        original_image_size = transformed_images.size()                                             # (batch_size, num_keyframes, num_channels, transformed_image_size, transformed_image_size)
+        original_images_size = transformed_images.size()                                             # (batch_size, num_keyframes, num_channels, transformed_image_size, transformed_image_size)
         # Combine images across videos in a batch into a single dimension to be embedded by ResNet
         transformed_images = torch.reshape(transformed_images, (-1, transformed_images.size(2), transformed_images.size(3), transformed_images.size(4)))    # (batch_size * num_keyframes, num_channels, transformed_image_size, transformed_image_size)
         image_emb = self.image_keyframes_emb(transformed_images)                                    # (batch_size * num_keyframes, encoded_image_size, encoded_image_size, 2048)
         image_emb = torch.reshape(image_emb, (image_emb.size(0), -1))                               # (batch_size * num_keyframes, encoded_image_size * encoded_image_size * 2048)
         image_linear_layer = nn.Linear(image_emb.size(-1), 300)                                     # Linear layer for linear transformation
         image_emb = image_linear_layer(image_emb)                                                   # (batch_size * num_keyframes, 300)
-        image_emb = torch.reshape(image_emb, (original_image_size[0], original_image_size[1], -1))  # (batch_size, num_keyframes, 300)
+        image_emb = torch.reshape(image_emb, (original_images_size[0], original_images_size[1], -1))  # (batch_size, num_keyframes, 300)
         image_emb = self.emb(image_emb)                                                             # (batch_size, num_keyframes, hidden_size)
         image_encoded = self.image_enc(image_emb, original_image_lengths)                           # (batch_size, num_keyframes, 2 * hidden_size)
 
         # TODO: This will only work for batch_size = 1. Add support for larger batches
         text_mask = torch.ones(1, embedded_text.size(1))                                            # (batch_size, padded_seq_length)
         audio_mask = torch.ones(1, embedded_audio.size(1))                                          # (batch_size, padded_seq_length)
-        image_mask = torch.ones(1, transformed_images.size(1))                                      # (batch_size, padded_seq_length)
+        image_mask = torch.ones(1, original_images_size[1])                                      # (batch_size, padded_seq_length)
 
         text_audio_att = self.bidaf_att_audio(text_encoded, audio_encoded, text_mask, audio_mask)   # (batch_size, num_sentences, 8 * hidden_size)
         text_image_att = self.bidaf_att_image(text_encoded, image_encoded, text_mask, image_mask)   # (batch_size, num_sentences, 8 * hidden_size)
@@ -103,7 +103,8 @@ class MMBiDAF(nn.Module):
         mod_text_image = self.mod_t_i(text_image_att, original_text_lengths)                        # (batch_size, num_sentences, 2 * hidden_size)
 
         if hidden_gru is None:
-            hidden_gru, sentence_dist = self.multimodal_att_decoder(mod_text_audio, mod_text_image)        # (batch_size, num_sentences, )
+            hidden_gru = self.multimodal_att_decoder.initHidden()
+            hidden_gru, sentence_dist = self.multimodal_att_decoder(mod_text_audio, mod_text_image, hidden_gru)        # (batch_size, num_sentences, )
         else:
             hidden_gru, sentence_dist = self.multimodal_att_decoder(mod_text_audio, mod_text_image, hidden_gru)
 

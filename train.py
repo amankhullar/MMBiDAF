@@ -47,12 +47,17 @@ def main(course_dir, text_embedding_size, audio_embedding_size, hidden_size, dro
     # Let's do this!
     step = 0
     model.train()
+    model.float()
     epoch = 0
 
     for batch_text, batch_audio, batch_images in zip(train_text_loader, train_audio_loader, train_image_loader):
         optimizer.zero_grad()
         
-        hidden_state, sentence_dist = model(batch_text, batch_text.size(1), batch_audio, batch_audio.size(1), batch_images, batch_images.size(1))
+        batch_text = batch_text.float()
+        batch_audio = batch_audio.float()
+        batch_images = batch_images.float()
+        
+        hidden_state, sentence_dist = model(batch_text, torch.Tensor([batch_text.size(1)]), batch_audio, torch.Tensor([batch_audio.size(1)]), batch_images, torch.Tensor([batch_images.size(1)]))
 
         print(hidden_state.size())
         print(hidden_state)
@@ -77,7 +82,7 @@ def main(course_dir, text_embedding_size, audio_embedding_size, hidden_size, dro
 if __name__ == '__main__':
     course_dir = '/home/anish17281/NLP_Dataset/dataset/'
     text_embedding_size = 300
-    audio_embedding_size = 300
+    audio_embedding_size = 128
     hidden_size = 100
     drop_prob = 0.2
     main(course_dir, text_embedding_size, audio_embedding_size, hidden_size, drop_prob)
