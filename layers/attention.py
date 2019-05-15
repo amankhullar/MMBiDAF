@@ -111,29 +111,33 @@ class MultimodalAttentionDecoder(nn.Module):
         self.drop_prob = drop_prob
         self.max_text_length = max_text_length
         self.gru = nn.GRU(hidden_size * 2, hidden_size * 2)
-        self.att_audio = nn.Linear(self.hidden_size * 2, self.max_text_length)
-        self.att_img = nn.Linear(self.hidden_size * 2, self.max_text_length)
-        self.att_mm = nn.Linear(self.hidden_size * 2, self.max_text_length)
+        self.att_audio = nn.Linear(self.hidden_size * 4, self.max_text_length)
+        self.att_img = nn.Linear(self.hidden_size * 4, self.max_text_length)
+        self.att_mm = nn.Linear(self.hidden_size * 6, self.max_text_length)
 
 
     def forward(self, audio_aware_text, image_aware_text, hidden_gru):
         print('audio_aware_text: {}'.format(audio_aware_text.size()))
+        print(audio_aware_text)
         print('image_aware_text: {}'.format(image_aware_text.size()))
+        print(image_aware_text)
         print('hidden_gru: {}'.format(hidden_gru.size()))
         
-        attention_weights_audio = F.softmax(self.att_audio(torch.cat((audio_aware_text, hidden_gru), 1)), dim=1)
+        attention_weights_audio = F.softmax(self.att_audio(torch.cat((audio_aware_text, hidden_gru), 2)), dim=1)
         attention_applied_audio = torch.bmm(attention_weights_audio, audio_aware_text)
         
         print('attention_weights_audio: {}'.format(attention_weights_audio.size()))
+        print(attention_weights_audio)
         print('attention_applied_audio: {}'.format(attention_applied_audio.size()))
 
-        attention_weights_img = F.softmax(self.att_img(torch.cat((image_aware_text, hidden_gru), 1)), dim=1)
+        attention_weights_img = F.softmax(self.att_img(torch.cat((image_aware_text, hidden_gru), 2)), dim=1)
         attention_applied_img = torch.bmm(attention_weights_img, image_aware_text)
         
         print('attention_weights_img: {}'.format(attention_weights_img.size()))
+        print(attention_weights_img)
         print('attention_applied_img: {}'.format(attention_applied_img.size()))
 
-        attention_weights_mm = F.softmax(self.att_mm(torch.cat((attention_applied_audio, attention_applied_img, hidden_gru), 1)), dim=1)
+        attention_weights_mm = F.softmax(self.att_mm(torch.cat((attention_applied_audio, attention_applied_img, hidden_gru), 2)), dim=1)
         
         print('attention_weights_mm: {}'.format(attention_weights_mm.size()))
         
@@ -141,7 +145,7 @@ class MultimodalAttentionDecoder(nn.Module):
         
         print('attention_applied_mm: {}'.format(attention_applied_mm.size()))
 
-        final_attention_weights = attention_weights_mm[0]*attention_weights_audio + attention_weights_mm[1]*attention_weights_img
+        final_attention_weights = attention_weights_mm[0]*attention_weights_audio[0] + attention_weights_mm[0]*attention_weights_img[0]
         
         print('final_attention_weights: {}'.format(final_attention_weights.size()))
         
