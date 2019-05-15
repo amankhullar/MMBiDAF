@@ -113,7 +113,11 @@ class MultimodalAttentionDecoder(nn.Module):
         self.gru = nn.GRU(hidden_size * 2, hidden_size * 2)
         self.att_audio = nn.Linear(self.hidden_size * 4, self.max_text_length)
         self.att_img = nn.Linear(self.hidden_size * 4, self.max_text_length)
-        self.att_mm = nn.Linear(self.hidden_size * 6, self.max_text_length)
+#         self.att_mm = nn.Linear(self.hidden_size * 6, self.max_text_length)
+        self.att_mm_audio = nn.Linear(self.hidden_size * 4, self.max_text_length)
+        self.att_mm_img = nn.Linear(self.hidden_size * 4, self.max_text_length)
+        self.att_combine = nn.Linear(self.hidden_size * 6, self.hidden_size * 2)
+        self.out = nn.Linear(self.hidden_size * 2, self.max_text_length)
 
 
     def forward(self, audio_aware_text, image_aware_text, hidden_gru):
@@ -123,37 +127,45 @@ class MultimodalAttentionDecoder(nn.Module):
         print(image_aware_text)
         print('hidden_gru: {}'.format(hidden_gru.size()))
         
-        attention_weights_audio = F.softmax(self.att_audio(torch.cat((audio_aware_text, hidden_gru), 2)), dim=1)
+        attention_weights_audio = F.softmax(self.att_audio(torch.cat((audio_aware_text, hidden_gru), 2)), dim=2)
         attention_applied_audio = torch.bmm(attention_weights_audio, audio_aware_text)
         
         print('attention_weights_audio: {}'.format(attention_weights_audio.size()))
         print(attention_weights_audio)
         print('attention_applied_audio: {}'.format(attention_applied_audio.size()))
 
-        attention_weights_img = F.softmax(self.att_img(torch.cat((image_aware_text, hidden_gru), 2)), dim=1)
+        attention_weights_img = F.softmax(self.att_img(torch.cat((image_aware_text, hidden_gru), 2)), dim=2)
         attention_applied_img = torch.bmm(attention_weights_img, image_aware_text)
         
         print('attention_weights_img: {}'.format(attention_weights_img.size()))
         print(attention_weights_img)
         print('attention_applied_img: {}'.format(attention_applied_img.size()))
 
-        attention_weights_mm = F.softmax(self.att_mm(torch.cat((attention_applied_audio, attention_applied_img, hidden_gru), 2)), dim=1)
+#         attention_weights_mm = F.softmax(self.att_mm(torch.cat((attention_applied_audio, attention_applied_img, hidden_gru), 2)), dim=1)
+        attention_weights_mm_audio = F.softmax(self.att_mm_audio(torch.cat((attention_applied_audio, hidden_gru), 2)), dim=2)
+        attention_weights_mm_img = F.softmax(self.att_mm_img(torch.cat((attention_applied_img, hidden_gru), 2)), dim=2)
         
-        print('attention_weights_mm: {}'.format(attention_weights_mm.size()))
+        print('attention_weights_mm: {}'.format(attention_weights_mm_audio.size()))
         
-        attention_applied_mm = torch.bmm(attention_weights_mm, attention_applied_audio) + torch.bmm(attention_weights_mm, attention_applied_img)
-        
+#         attention_applied_mm = torch.bmm(attention_weights_mm, attention_applied_audio) + torch.bmm(attention_weights_mm, attention_applied_img)
+        attention_applied_mm = torch.bmm(attention_weights_mm_audio, attention_applied_audio) + torch.bmm(attention_weights_mm_img, attention_applied_img)
+    
         print('attention_applied_mm: {}'.format(attention_applied_mm.size()))
 
-        final_attention_weights = attention_weights_mm[0]*attention_weights_audio[0] + attention_weights_mm[0]*attention_weights_img[0]
+        final_attention_weights = attention_weights_mm_audio[0]*attention_weights_audio[0] + attention_weights_mm_img[0]*attention_weights_img[0]
         
-        print('final_attention_weights: {}'.format(final_attention_weights.size()))
+#         print('final_attention_weights: {}'.format(final_attention_weights.size()))
         
-        _, hidden_gru = self.gru(attention_applied_mm, hidden_gru)
+        final_out = torch.cat((audio_aware_text, image_aware_text, attention_applied_mm), 2)
+        final_out = self.att_combine(final_out)
+        final_out = F.relu(final_out)
+        print(final_out.size())
+        final_out, hidden_gru = self.gru(final_out, hidden_gru)
 
         # TODO: Apply softmax over decoder output to get probability distribution?
         
-        return hidden_gru, final_attention_weights
+        final_out = F.softmax(self.out(final_out), dim=2)
+        return hidden_gru, final_out, final_attention_weights
 
     def initHidden(self):
         return torch.zeros(1, self.max_text_length, self.hidden_size * 2)

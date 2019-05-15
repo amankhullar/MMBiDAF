@@ -104,8 +104,8 @@ class MMBiDAF(nn.Module):
 
         if hidden_gru is None:
             hidden_gru = self.multimodal_att_decoder.initHidden()
-            hidden_gru, sentence_dist = self.multimodal_att_decoder(mod_text_audio, mod_text_image, hidden_gru)        # (batch_size, num_sentences, )
+            hidden_gru, final_out, sentence_dist = self.multimodal_att_decoder(mod_text_audio, mod_text_image, hidden_gru)        # (batch_size, num_sentences, )
         else:
-            hidden_gru, sentence_dist = self.multimodal_att_decoder(mod_text_audio, mod_text_image, hidden_gru)
+            hidden_gru, final_out, sentence_dist = self.multimodal_att_decoder(mod_text_audio, mod_text_image, hidden_gru)
 
-        return hidden_gru, sentence_dist
+        return hidden_gru, final_out, sentence_dist
