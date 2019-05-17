@@ -152,3 +152,38 @@ class AudioDataset(Dataset):
         audio_vectors = np.transpose(audio_vectors)
         audio_vectors = torch.from_numpy(audio_vectors)
         return audio_vectors
+
+class TagetDataset(Dataset):
+    """
+    A Pytorch dataset class to be used in loading target datatset for training and evaluation purpose.
+    """
+    def __init__(self, courses_dir):
+        """
+        Args :
+             courses_dir (string) : The directory containing the entire dataset.
+        """
+        self.courses_dir = courses_dir
+        self.target_sentences_path = self.load_sentences_path()
+
+        def load_sentences_path(self):
+            target_sentences = []
+            dirlist = []
+            for fname in os.listdir(self.courses_dir):
+                if os.path.isdir(os.path.join(self.courses_dir, fname)):
+                    dirlist.append(fname)
+
+            for course_number in sorted(dirlist, key=int):
+                target_path = os.path.join(self.courses_dir, course_number, 'ground-truth/')
+                target_sentence_path = [target_path + target_sentence for target_sentence in sorted(os.listdir(target_path), key=self.get_num)]
+                target_sentences.append(target_sentence_path)
+
+            return [val for sublist in target_sentences for val in sublist]    #Flatten the list of lists
+
+        def get_num(self, str):
+            return int(re.search(r'\d+', str).group())
+        
+        def __len__():
+            return len(self.target_sentences_path)
+
+        def __get_item__(self, idx):
+            self.
