@@ -38,7 +38,7 @@ def main(course_dir, text_embedding_size, audio_embedding_size, hidden_size, dro
     train_image_loader = torch.utils.data.DataLoader(ImageDataset(course_dir, transform), batch_size = 1, shuffle = False, num_workers = 2)
 
     # Create model
-    model = MMBiDAF(hidden_size, text_embedding_size, audio_embedding_size, drop_prob, 48)
+    model = MMBiDAF(hidden_size, text_embedding_size, audio_embedding_size, drop_prob, 405)
 
     # Get optimizer and scheduler
     optimizer = optim.Adadelta(model.parameters(), 1e-3)
