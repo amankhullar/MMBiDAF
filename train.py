@@ -50,34 +50,30 @@ def main(course_dir, text_embedding_size, audio_embedding_size, hidden_size, dro
     model.float()
     epoch = 0
 
-    for batch_text, batch_audio, batch_images in zip(train_text_loader, train_audio_loader, train_image_loader):
-        optimizer.zero_grad()
-        
-        batch_text = batch_text.float()
-        batch_audio = batch_audio.float()
-        batch_images = batch_images.float()
-        
-        hidden_state, final_out, sentence_dist = model(batch_text, torch.Tensor([batch_text.size(1)]), batch_audio, torch.Tensor([batch_audio.size(1)]), batch_images, torch.Tensor([batch_images.size(1)]))
+    with torch.enable_grad(), tqdm(total=max(len(train_text_loader.dataset), len(train_image_loader.dataset), len(train_audio_loader.dataset))) as progress_bar:
+        for batch_text, batch_audio, batch_images in zip(train_text_loader, train_audio_loader, train_image_loader):
+                optimizer.zero_grad()
+                
+                batch_text = batch_text.float()
+                batch_audio = batch_audio.float()
+                batch_images = batch_images.float()
+                
+                hidden_state, final_out, sentence_dist = model(batch_text, torch.Tensor([batch_text.size(1)]), batch_audio, torch.Tensor([batch_audio.size(1)]), batch_images, torch.Tensor([batch_images.size(1)]))
 
-        print(hidden_state.size())
-        print(hidden_state)
-        print(sentence_dist.size())
-        print(sentence_dist)
-        print(final_out.size())
-        print(final_out)
-        break
-        # Forward
-        # log_p1, log_p2 = model(cw_idxs, qw_idxs)
-        # y1, y2 = y1.to(device), y2.to(device)
-        # loss = F.nll_loss(log_p1, y1) + F.nll_loss(log_p2, y2)
-        # loss_val = loss.item()
+                
+                break
+                # Forward
+                # log_p1, log_p2 = model(cw_idxs, qw_idxs)
+                # y1, y2 = y1.to(device), y2.to(device)
+                # loss = F.nll_loss(log_p1, y1) + F.nll_loss(log_p2, y2)
+                # loss_val = loss.item()
 
-        # # Backward
-        # loss.backward()
-        # nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
-        # optimizer.step()
-        # scheduler.step(step // batch_size)
-        # ema(model, step // batch_size)
+                # # Backward
+                # loss.backward()
+                # nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
+                # optimizer.step()
+                # scheduler.step(step // batch_size)
+                # ema(model, step // batch_size)
 
 
     

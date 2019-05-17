@@ -25,3 +25,4 @@ def masked_softmax(logits, mask, dim=-1, log_softmax=False):
     probs = softmax_fn(masked_logits, dim)
 
     return probs
+    
