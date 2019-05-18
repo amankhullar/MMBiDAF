@@ -25,9 +25,9 @@ from tqdm import tqdm
 from ujson import load as json_load
 
 
-def main(course_dir, text_embedding_size, audio_embedding_size, hidden_size, drop_prob):
+def main(course_dir, text_embedding_size, audio_embedding_size, hidden_size, drop_prob, max_text_length):
     # Get sentence embeddings
-    train_text_loader = torch.utils.data.DataLoader(TextDataset(course_dir), batch_size = 1, shuffle = False, num_workers = 2)
+    train_text_loader = torch.utils.data.DataLoader(TextDataset(course_dir, max_text_length), batch_size = 1, shuffle = False, num_workers = 2)
 
     # Get Audio embeddings
     train_audio_loader = torch.utils.data.DataLoader(AudioDataset(course_dir), batch_size = 1, shuffle = False, num_workers = 2)
@@ -38,7 +38,7 @@ def main(course_dir, text_embedding_size, audio_embedding_size, hidden_size, dro
     train_image_loader = torch.utils.data.DataLoader(ImageDataset(course_dir, transform), batch_size = 1, shuffle = False, num_workers = 2)
 
     # Create model
-    model = MMBiDAF(hidden_size, text_embedding_size, audio_embedding_size, drop_prob, 405)
+    model = MMBiDAF(hidden_size, text_embedding_size, audio_embedding_size, drop_prob, max_text_length)
 
     # Get optimizer and scheduler
     optimizer = optim.Adadelta(model.parameters(), 1e-3)
@@ -51,7 +51,7 @@ def main(course_dir, text_embedding_size, audio_embedding_size, hidden_size, dro
     epoch = 0
 
     with torch.enable_grad(), tqdm(total=max(len(train_text_loader.dataset), len(train_image_loader.dataset), len(train_audio_loader.dataset))) as progress_bar:
-        for batch_text, batch_audio, batch_images in zip(train_text_loader, train_audio_loader, train_image_loader):
+        for (batch_text, original_text_length), batch_audio, batch_images in zip(train_text_loader, train_audio_loader, train_image_loader):
                 optimizer.zero_grad()
                 
                 batch_text = batch_text.float()
@@ -59,7 +59,8 @@ def main(course_dir, text_embedding_size, audio_embedding_size, hidden_size, dro
                 batch_images = batch_images.float()
                 
                 hidden_state, final_out, sentence_dist = model(batch_text, torch.Tensor([batch_text.size(1)]), batch_audio, torch.Tensor([batch_audio.size(1)]), batch_images, torch.Tensor([batch_images.size(1)]))
-
+                
+                print(final_out)
                 
                 break
                 # Forward
@@ -83,4 +84,5 @@ if __name__ == '__main__':
     audio_embedding_size = 128
     hidden_size = 100
     drop_prob = 0.2
-    main(course_dir, text_embedding_size, audio_embedding_size, hidden_size, drop_prob)
+    max_text_length = 405
+    main(course_dir, text_embedding_size, audio_embedding_size, hidden_size, drop_prob, max_text_length)

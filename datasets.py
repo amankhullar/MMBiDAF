@@ -16,13 +16,14 @@ class TextDataset(Dataset):
     """
     A Pytorch dataset class to be used in the Pytorch Dataloader to create text batches
     """
-    def __init__(self, courses_dir):
+    def __init__(self, courses_dir, max_text_length=405):
         """
         Args :
              courses_dir (string) : The directory containing the embeddings for the preprocessed sentences 
         """
         self.courses_dir = courses_dir
         self.text_embeddings_path = self.load_sentence_embeddings_path()
+        self.max_text_length = max_text_length
 
     def load_sentence_embeddings_path(self):
         transcript_embeddings = []
@@ -49,10 +50,10 @@ class TextDataset(Dataset):
     def __getitem__(self, idx):
         self.embedding_path = self.text_embeddings_path[idx]
         self.embedding_dict = torch.load(self.embedding_path)
-        word_vectors = torch.zeros(len(self.embedding_dict),300)
+        word_vectors = torch.zeros(self.max_text_length, 300)
         for count, sentence in enumerate(self.embedding_dict):
             word_vectors[count] = self.embedding_dict[sentence]
-        return word_vectors
+        return word_vectors, len(self.embedding_dict)
 
 class ImageDataset(Dataset):
     """
@@ -238,6 +239,6 @@ class TargetDataset(Dataset):
 
         target_indices = []
         for target_sentence in target_sentences:
-            target_indices.append(source_sentences.index(target_sentence))
+            target_indices.append(torch.Tensor([source_sentences.index(target_sentence)]))
         
-        return target_indices
+        return torch.stack(target_indices)

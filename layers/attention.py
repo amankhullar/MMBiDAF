@@ -142,7 +142,6 @@ class MultimodalAttentionDecoder(nn.Module):
         final_out = torch.cat((audio_aware_text, image_aware_text, attention_applied_mm), 2)
         final_out = self.att_combine(final_out)
         final_out = F.relu(final_out)
-        print(final_out.size())
         final_out, hidden_gru = self.gru(final_out, hidden_gru)
         
         final_out = F.log_softmax(self.out(final_out), dim=2)    # TODO: apply masked softmax
