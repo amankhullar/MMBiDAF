@@ -155,7 +155,7 @@ class AudioDataset(Dataset):
         audio_vectors = torch.from_numpy(audio_vectors)
         return audio_vectors
 
-class TagetDataset(Dataset):
+class TargetDataset(Dataset):
     """
     A Pytorch dataset class to be used in loading target datatset for training and evaluation purpose.
     """
@@ -183,7 +183,7 @@ class TagetDataset(Dataset):
         return [val for sublist in target_sentences for val in sublist]    #Flatten the list of lists
 
     def load_source_sentences_path(self):
-        transcript_embeddings = []
+        source_sentences = []
 
         # Get sorted list of all courses (excluding any files)
         dirlist = []
@@ -192,11 +192,11 @@ class TagetDataset(Dataset):
                 dirlist.append(fname)
         
         for course_number in sorted(dirlist, key=int):
-            course_transcript_path = os.path.join(self.courses_dir, course_number, 'sentence_features/')
-            text_embedding_path = [self.courses_dir + course_number + '/sentence_features/' + transcript_path for transcript_path in sorted(os.listdir(course_transcript_path), key=self.get_num)]
-            transcript_embeddings.append(text_embedding_path)
+            source_path = os.path.join(self.courses_dir, course_number, 'transcripts/')
+            source_sentence_path = [source_path + transcript_path for transcript_path in sorted(os.listdir(source_path), key=self.get_num)]
+            source_sentences.append(source_sentence_path)
 
-        return [val for sublist in transcript_embeddings for val in sublist]    #Flatten the list of lists
+        return [val for sublist in source_sentences for val in sublist]    #Flatten the list of lists
 
     def get_num(self, str):
         return int(re.search(r'\d+', str).group())
@@ -204,8 +204,11 @@ class TagetDataset(Dataset):
     def __len__(self):
         return len(self.target_sentences_path)
 
-    def __get_item__(self, idx):
+    def __getitem__(self, idx):
         lines = []
+        source_text = str()
+        target_text = str()
+        print('path is {}'.format(self.source_sentences_path[idx]))
         try:
             with open(self.source_sentences_path[idx]) as f:
                 for line in f:
@@ -219,6 +222,7 @@ class TagetDataset(Dataset):
         
         source_text = source_text.lower()
         source_sentences = sent_tokenize(source_text)
+        print('source_sentences {}'.format(source_sentences))
 
         lines = []
         try:
@@ -234,6 +238,7 @@ class TagetDataset(Dataset):
 
         target_text = target_text.lower()
         target_sentences = sent_tokenize(target_text)
+        print('target_sentences'.format(target_sentences))
 
         target_indices = []
         for target_sentence in target_sentences:
