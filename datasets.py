@@ -177,7 +177,7 @@ class TargetDataset(Dataset):
 
         for course_number in sorted(dirlist, key=int):
             target_path = os.path.join(self.courses_dir, course_number, 'ground-truth/')
-            target_sentence_path = [target_path + target_sentence for target_sentence in sorted(os.listdir(target_path), key=self.get_num)]
+            target_sentence_path = [target_path + target_sentence for target_sentence in sorted([item for item in os.listdir(target_path) if os.path.isfile(os.path.join(target_path, item)) and '.txt' in item and '_' not in item], key=self.get_num)]
             target_sentences.append(target_sentence_path)
 
         return [val for sublist in target_sentences for val in sublist]    #Flatten the list of lists
@@ -193,7 +193,8 @@ class TargetDataset(Dataset):
         
         for course_number in sorted(dirlist, key=int):
             source_path = os.path.join(self.courses_dir, course_number, 'transcripts/')
-            source_sentence_path = [source_path + transcript_path for transcript_path in sorted(os.listdir(source_path), key=self.get_num)]
+            source_sentence_path = [source_path + transcript_path for transcript_path in sorted([item for item in os.listdir(source_path) if os.path.isfile(os.path.join(source_path, item)) and '.txt' in item], key=self.get_num)]
+
             source_sentences.append(source_sentence_path)
 
         return [val for sublist in source_sentences for val in sublist]    #Flatten the list of lists
@@ -206,9 +207,6 @@ class TargetDataset(Dataset):
 
     def __getitem__(self, idx):
         lines = []
-        source_text = str()
-        target_text = str()
-        print('path is {}'.format(self.source_sentences_path[idx]))
         try:
             with open(self.source_sentences_path[idx]) as f:
                 for line in f:
@@ -222,7 +220,6 @@ class TargetDataset(Dataset):
         
         source_text = source_text.lower()
         source_sentences = sent_tokenize(source_text)
-        print('source_sentences {}'.format(source_sentences))
 
         lines = []
         try:
@@ -238,7 +235,6 @@ class TargetDataset(Dataset):
 
         target_text = target_text.lower()
         target_sentences = sent_tokenize(target_text)
-        print('target_sentences'.format(target_sentences))
 
         target_indices = []
         for target_sentence in target_sentences:
