@@ -3,11 +3,13 @@ import os
 import pickle
 import re
 import sys
+import logging
 
 import numpy as np
 import torch
 from PIL import Image
 from torch.utils.data import Dataset
+from nltk.tokenize import sent_tokenize
 
 
 class TextDataset(Dataset):
@@ -163,27 +165,78 @@ class TagetDataset(Dataset):
              courses_dir (string) : The directory containing the entire dataset.
         """
         self.courses_dir = courses_dir
-        self.target_sentences_path = self.load_sentences_path()
+        self.target_sentences_path = self.load_target_sentences_path()
+        self.source_sentences_path = self.load_source_sentences_path()
 
-        def load_sentences_path(self):
-            target_sentences = []
-            dirlist = []
-            for fname in os.listdir(self.courses_dir):
-                if os.path.isdir(os.path.join(self.courses_dir, fname)):
-                    dirlist.append(fname)
+    def load_target_sentences_path(self):
+        target_sentences = []
+        dirlist = []
+        for fname in os.listdir(self.courses_dir):
+            if os.path.isdir(os.path.join(self.courses_dir, fname)):
+                dirlist.append(fname)
 
-            for course_number in sorted(dirlist, key=int):
-                target_path = os.path.join(self.courses_dir, course_number, 'ground-truth/')
-                target_sentence_path = [target_path + target_sentence for target_sentence in sorted(os.listdir(target_path), key=self.get_num)]
-                target_sentences.append(target_sentence_path)
+        for course_number in sorted(dirlist, key=int):
+            target_path = os.path.join(self.courses_dir, course_number, 'ground-truth/')
+            target_sentence_path = [target_path + target_sentence for target_sentence in sorted(os.listdir(target_path), key=self.get_num)]
+            target_sentences.append(target_sentence_path)
 
-            return [val for sublist in target_sentences for val in sublist]    #Flatten the list of lists
+        return [val for sublist in target_sentences for val in sublist]    #Flatten the list of lists
 
-        def get_num(self, str):
-            return int(re.search(r'\d+', str).group())
+    def load_source_sentences_path(self):
+        transcript_embeddings = []
+
+        # Get sorted list of all courses (excluding any files)
+        dirlist = []
+        for fname in os.listdir(self.courses_dir):
+            if os.path.isdir(os.path.join(self.courses_dir, fname)):
+                dirlist.append(fname)
         
-        def __len__():
-            return len(self.target_sentences_path)
+        for course_number in sorted(dirlist, key=int):
+            course_transcript_path = os.path.join(self.courses_dir, course_number, 'sentence_features/')
+            text_embedding_path = [self.courses_dir + course_number + '/sentence_features/' + transcript_path for transcript_path in sorted(os.listdir(course_transcript_path), key=self.get_num)]
+            transcript_embeddings.append(text_embedding_path)
 
-        def __get_item__(self, idx):
-            self.
+        return [val for sublist in transcript_embeddings for val in sublist]    #Flatten the list of lists
+
+    def get_num(self, str):
+        return int(re.search(r'\d+', str).group())
+    
+    def __len__(self):
+        return len(self.target_sentences_path)
+
+    def __get_item__(self, idx):
+        lines = []
+        try:
+            with open(self.source_sentences_path[idx]) as f:
+                for line in f:
+                    if re.match(r'\d+:\d+', line) is None:
+                        line = line.replace('[MUSIC]', '')
+                        lines.append(line.strip())
+        except Exception as e:
+            logging.error('Unable to open file. Exception: ' + str(e))
+        else:
+            source_text = ' '.join(lines)
+        
+        source_text = source_text.lower()
+        source_sentences = sent_tokenize(source_text)
+
+        lines = []
+        try:
+            with open(self.target_sentences_path[idx]) as f:
+                for line in f:
+                    if re.match(r'\d+:\d+', line) is None:
+                        line = line.replace('[MUSIC]', '')
+                        lines.append(line.strip())
+        except Exception as e:
+            logging.error('Unable to open file. Exception: ' + str(e))
+        else:
+            target_text = ' '.join(lines)
+
+        target_text = target_text.lower()
+        target_sentences = sent_tokenize(target_text)
+
+        target_indices = []
+        for target_sentence in target_sentences:
+            target_indices.append(source_sentences.index(target_sentence))
+        
+        return target_indices
