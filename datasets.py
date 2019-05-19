@@ -53,7 +53,8 @@ class TextDataset(Dataset):
         word_vectors = torch.zeros(self.max_text_length, 300)
         for count, sentence in enumerate(self.embedding_dict):
             word_vectors[count] = self.embedding_dict[sentence]
-        return word_vectors, len(self.embedding_dict)
+        word_vectors[len(self.embedding_dict)] = torch.zeros(1, 300) - 1            # End of summary token embedding
+        return word_vectors, len(self.embedding_dict) + 1                           # Added EOS to the original data
 
 class ImageDataset(Dataset):
     """
