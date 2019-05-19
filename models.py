@@ -92,7 +92,10 @@ class MMBiDAF(nn.Module):
         image_encoded = self.image_enc(image_emb, original_image_lengths)                           # (batch_size, num_keyframes, 2 * hidden_size)
 
         # TODO: This will only work for batch_size = 1. Add support for larger batches
-        text_mask = torch.ones(1, embedded_text.size(1))                                            # (batch_size, padded_seq_length)
+        ones = torch.ones(1, 1, int(original_text_lengths[0]))
+        zeros = torch.zeros(1, 1, embedded_text.size(1) - int(original_text_lengths[0]))
+        text_mask = torch.cat((ones, zeros), 2)                                           # (batch_size, padded_seq_length)
+        
         audio_mask = torch.ones(1, embedded_audio.size(1))                                          # (batch_size, padded_seq_length)
         image_mask = torch.ones(1, original_images_size[1])                                         # (batch_size, padded_seq_length)
 
@@ -104,8 +107,8 @@ class MMBiDAF(nn.Module):
 
         if hidden_gru is None:
             hidden_gru = self.multimodal_att_decoder.initHidden()
-            hidden_gru, final_out, sentence_dist = self.multimodal_att_decoder(mod_text_audio, mod_text_image, hidden_gru)        # (batch_size, num_sentences, )
+            hidden_gru, final_out, sentence_dist = self.multimodal_att_decoder(mod_text_audio, mod_text_image, hidden_gru, text_mask)        # (batch_size, num_sentences, )
         else:
-            hidden_gru, final_out, sentence_dist = self.multimodal_att_decoder(mod_text_audio, mod_text_image, hidden_gru)
+            hidden_gru, final_out, sentence_dist = self.multimodal_att_decoder(mod_text_audio, mod_text_image, hidden_gru, text_mask)
 
         return hidden_gru, final_out, sentence_dist

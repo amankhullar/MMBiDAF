@@ -23,6 +23,9 @@ def masked_softmax(logits, mask, dim=-1, log_softmax=False):
     masked_logits = mask * logits + (1 - mask) * -1e30
     softmax_fn = F.log_softmax if log_softmax else F.softmax
     probs = softmax_fn(masked_logits, dim)
+    
+    print('masked_logit {}'.format(masked_logits))
+    print('1 - mask {}'.format(1 - mask))
 
     return probs
     

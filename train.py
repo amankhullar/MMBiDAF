@@ -52,17 +52,20 @@ def main(course_dir, text_embedding_size, audio_embedding_size, hidden_size, dro
 
     with torch.enable_grad(), tqdm(total=max(len(train_text_loader.dataset), len(train_image_loader.dataset), len(train_audio_loader.dataset))) as progress_bar:
         for (batch_text, original_text_length), batch_audio, batch_images in zip(train_text_loader, train_audio_loader, train_image_loader):
+                epoch += 1
                 optimizer.zero_grad()
                 
                 batch_text = batch_text.float()
                 batch_audio = batch_audio.float()
                 batch_images = batch_images.float()
                 
-                hidden_state, final_out, sentence_dist = model(batch_text, torch.Tensor([batch_text.size(1)]), batch_audio, torch.Tensor([batch_audio.size(1)]), batch_images, torch.Tensor([batch_images.size(1)]))
+                hidden_state, final_out, sentence_dist = model(batch_text, original_text_length, batch_audio, torch.Tensor([batch_audio.size(1)]), batch_images, torch.Tensor([batch_images.size(1)]))
                 
                 print(final_out)
+                print(final_out.size())
                 
-                break
+                if epoch == 2:
+                    break
                 # Forward
                 # log_p1, log_p2 = model(cw_idxs, qw_idxs)
                 # y1, y2 = y1.to(device), y2.to(device)

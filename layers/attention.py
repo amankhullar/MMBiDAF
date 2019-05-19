@@ -120,7 +120,7 @@ class MultimodalAttentionDecoder(nn.Module):
         self.out = nn.Linear(self.hidden_size * 2, self.max_text_length)
 
 
-    def forward(self, audio_aware_text, image_aware_text, hidden_gru):
+    def forward(self, audio_aware_text, image_aware_text, hidden_gru, text_mask):
         
         attention_weights_audio = F.softmax(self.att_audio(torch.cat((audio_aware_text, hidden_gru), 2)), dim=2)
         attention_applied_audio = torch.bmm(attention_weights_audio, audio_aware_text)
@@ -143,8 +143,7 @@ class MultimodalAttentionDecoder(nn.Module):
         final_out = self.att_combine(final_out)
         final_out = F.relu(final_out)
         final_out, hidden_gru = self.gru(final_out, hidden_gru)
-        
-        final_out = F.log_softmax(self.out(final_out), dim=2)    # TODO: apply masked softmax
+        final_out = masked_softmax(self.out(final_out), text_mask, log_softmax=False)    # TODO: apply masked softmax
         return hidden_gru, final_out, final_attention_weights
 
     def initHidden(self):
