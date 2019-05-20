@@ -67,9 +67,8 @@ def main(course_dir, text_embedding_size, audio_embedding_size, hidden_size, dro
             batch_images = batch_images.float()
 
             # Forward
-
             out_distributions = model(batch_text, original_text_length, batch_audio, torch.Tensor([batch_audio.size(1)]), batch_images, torch.Tensor([batch_images.size(1)]), hidden_state)
-
+            
             for batch, target_indices in enumerate(batch_target_indices):
                 for timestep, target_idx in enumerate(target_indices.squeeze(1)):
                     print(target_idx)
@@ -77,6 +76,11 @@ def main(course_dir, text_embedding_size, audio_embedding_size, hidden_size, dro
                     print("Prob = {}".format(prob))
                     loss += -1 * torch.log(prob)
                     print("Loss = {}".format(loss))
+
+            # Backward
+            loss.backward()
+            optimizer.step()
+            scheduler.step()
 
             #     print(out_distributions)
             print(len(out_distributions))

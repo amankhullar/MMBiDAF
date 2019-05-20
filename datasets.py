@@ -241,5 +241,6 @@ class TargetDataset(Dataset):
         target_indices = []
         for target_sentence in target_sentences:
             target_indices.append(torch.Tensor([source_sentences.index(target_sentence)]))
+        target_indices.append(torch.Tensor([len(source_sentences)]))                        # Appended the EOS token
         
         return torch.stack(target_indices)
