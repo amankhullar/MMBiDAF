@@ -66,7 +66,7 @@ def main(course_dir, text_embedding_size, audio_embedding_size, hidden_size, dro
 
                         # Forward
                         
-                        hidden_state, final_out_list, sentence_dist = model(batch_text, original_text_length, batch_audio, torch.Tensor([batch_audio.size(1)]), batch_images, torch.Tensor([batch_images.size(1)], hidden_state))
+                        hidden_state, final_out, sentence_dist = model(batch_text, original_text_length, batch_audio, torch.Tensor([batch_audio.size(1)]), batch_images, torch.Tensor([batch_images.size(1)], hidden_state))
                         
                         print(final_out)
                         print(final_out.size())
