@@ -73,7 +73,7 @@ def main(course_dir, text_embedding_size, audio_embedding_size, hidden_size, dro
             for batch, target_indices in enumerate(batch_target_indices):
                 for timestep, target_idx in enumerate(target_indices.squeeze(1)):
                     print(target_idx)
-                    prob = out_distributions[timestep][batch, 0, int(target_idx)]
+                    prob = out_distributions[timestep][batch, int(target_idx)]
                     print("Prob = {}".format(prob))
                     loss += -1 * torch.log(prob)
                     print("Loss = {}".format(loss))

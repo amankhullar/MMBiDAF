@@ -154,8 +154,9 @@ class MultimodalAttentionDecoder(nn.Module):
             final_out = self.att_combine(final_out)
             final_out = F.relu(final_out)
             final_out, hidden_gru = self.gru(final_out, hidden_gru)
-            final_out = masked_softmax(self.out(final_out), text_mask, log_softmax=False)    # TODO: apply masked softmax
+            final_out = masked_softmax(self.out(final_out), text_mask, log_softmax=False)
 
+            final_out = final_out.squeeze(1)
             out_distributions.append(final_out)
 
         return out_distributions
