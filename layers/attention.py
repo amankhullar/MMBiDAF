@@ -131,20 +131,20 @@ class MultimodalAttentionDecoder(nn.Module):
             print(type(audio_aware_text_curr))
             image_aware_text_curr = image_aware_text[:, idx:idx+1, :]
             attention_weights_audio = F.softmax(self.att_audio(torch.cat((audio_aware_text_curr, hidden_gru), 2)), dim=2)
-            print('attention_weights_audio {}'.format(attention_weights_audio.size()))
+            # print('attention_weights_audio {}'.format(attention_weights_audio.size()))
             attention_applied_audio = torch.bmm(attention_weights_audio, audio_aware_text)
-            print('attention_applied_audio {}'.format(attention_applied_audio.size()))
+            # print('attention_applied_audio {}'.format(attention_applied_audio.size()))
             attention_weights_img = F.softmax(self.att_img(torch.cat((image_aware_text_curr, hidden_gru), 2)), dim=2)
             attention_applied_img = torch.bmm(attention_weights_img, image_aware_text)
 
     #         attention_weights_mm = F.softmax(self.att_mm(torch.cat((attention_applied_audio, attention_applied_img, hidden_gru), 2)), dim=1)
             attention_weights_mm_audio = F.softmax(self.att_mm_audio(torch.cat((attention_applied_audio, hidden_gru), 2)), dim=2)
-            print('attention_weights_mm_audio {}'.format(attention_weights_mm_audio.size()))
+            # print('attention_weights_mm_audio {}'.format(attention_weights_mm_audio.size()))
             attention_weights_mm_img = F.softmax(self.att_mm_img(torch.cat((attention_applied_img, hidden_gru), 2)), dim=2)
-            print('attention_weights_mm_audio {}'.format(attention_weights_mm_audio.size()))
+            # print('attention_weights_mm_audio {}'.format(attention_weights_mm_audio.size()))
     #         attention_applied_mm = torch.bmm(attention_weights_mm, attention_applied_audio) + torch.bmm(attention_weights_mm, attention_applied_img)
             attention_applied_mm = torch.bmm(attention_weights_mm_audio, attention_applied_audio) + torch.bmm(attention_weights_mm_img, attention_applied_img)
-            print('attention_applied_mm {}'.format(attention_applied_mm.size()))
+            # print('attention_applied_mm {}'.format(attention_applied_mm.size()))
 
             final_attention_weights = attention_weights_mm_audio[0]*attention_weights_audio[0] + attention_weights_mm_img[0]*attention_weights_img[0]
             

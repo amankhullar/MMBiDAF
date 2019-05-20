@@ -17,7 +17,7 @@ import torch.optim.lr_scheduler as sched
 import torch.utils.data as data
 import torchvision
 import torchvision.transforms as transforms
-from datasets import AudioDataset, ImageDataset, TextDataset
+from datasets import *
 from models import MMBiDAF
 from PIL import Image
 from tensorboardX import SummaryWriter
@@ -37,6 +37,9 @@ def main(course_dir, text_embedding_size, audio_embedding_size, hidden_size, dro
     transform = transforms.Compose([transforms.RandomResizedCrop(256), transforms.RandomHorizontalFlip(), transforms.ToTensor(), normalize,])
     train_image_loader = torch.utils.data.DataLoader(ImageDataset(course_dir, transform), batch_size = 1, shuffle = False, num_workers = 2)
 
+    # Load Target text
+    train_target_loader = torch.utils.data.DataLoader(TargetDataset(course_dir), batch_size = 1, shuffle = False, num_workers = 2)
+
     # Create model
     model = MMBiDAF(hidden_size, text_embedding_size, audio_embedding_size, drop_prob, max_text_length)
 
@@ -50,9 +53,10 @@ def main(course_dir, text_embedding_size, audio_embedding_size, hidden_size, dro
     model.float()
     hidden_state = None
     epoch = 0
+    loss = 0
 
     with torch.enable_grad(), tqdm(total=max(len(train_text_loader.dataset), len(train_image_loader.dataset), len(train_audio_loader.dataset))) as progress_bar:
-        for (batch_text, original_text_length), batch_audio, batch_images in zip(train_text_loader, train_audio_loader, train_image_loader):
+        for (batch_text, original_text_length), batch_audio, batch_images, batch_target_indices in zip(train_text_loader, train_audio_loader, train_image_loader, train_target_loader):
             # Setup for forward
             batch_size = batch_text.size(0)
             optimizer.zero_grad()
@@ -65,6 +69,14 @@ def main(course_dir, text_embedding_size, audio_embedding_size, hidden_size, dro
             # Forward
 
             out_distributions = model(batch_text, original_text_length, batch_audio, torch.Tensor([batch_audio.size(1)]), batch_images, torch.Tensor([batch_images.size(1)]), hidden_state)
+
+            for batch, target_indices in enumerate(batch_target_indices):
+                for timestep, target_idx in enumerate(target_indices.squeeze(1)):
+                    print(target_idx)
+                    prob = out_distributions[timestep][batch, 0, int(target_idx)]
+                    print("Prob = {}".format(prob))
+                    loss += -1 * torch.log(prob)
+                    print("Loss = {}".format(loss))
 
             #     print(out_distributions)
             print(len(out_distributions))
