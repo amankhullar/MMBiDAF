@@ -105,10 +105,12 @@ class MMBiDAF(nn.Module):
         mod_text_audio = self.mod_t_a(text_audio_att, original_text_lengths)                        # (batch_size, num_sentences, 2 * hidden_size)
         mod_text_image = self.mod_t_i(text_image_att, original_text_lengths)                        # (batch_size, num_sentences, 2 * hidden_size)
 
-        if hidden_gru is None:
-            hidden_gru = self.multimodal_att_decoder.initHidden()
-            hidden_gru, final_out, sentence_dist = self.multimodal_att_decoder(mod_text_audio, mod_text_image, hidden_gru, text_mask)        # (batch_size, num_sentences, )
-        else:
-            hidden_gru, final_out, sentence_dist = self.multimodal_att_decoder(mod_text_audio, mod_text_image, hidden_gru, text_mask)
+        # if hidden_gru is None:
+        #     hidden_gru = self.multimodal_att_decoder.initHidden()
+        #     hidden_gru, final_out, sentence_dist = self.multimodal_att_decoder(mod_text_audio, mod_text_image, hidden_gru, text_mask)        # (batch_size, num_sentences, )
+        # else:
+        #     hidden_gru, final_out, sentence_dist = self.multimodal_att_decoder(mod_text_audio, mod_text_image, hidden_gru, text_mask)
 
-        return hidden_gru, final_out, sentence_dist
+        out_distributions = self.multimodal_att_decoder(mod_text_audio, mod_text_image, hidden_gru, text_mask)
+
+        return out_distributions

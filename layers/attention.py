@@ -111,42 +111,49 @@ class MultimodalAttentionDecoder(nn.Module):
         self.drop_prob = drop_prob
         self.max_text_length = max_text_length
         self.gru = nn.GRU(hidden_size * 2, hidden_size * 2)
-        self.att_audio = nn.Linear(self.hidden_size * 4, 1)
-        self.att_img = nn.Linear(self.hidden_size * 4, 1)
+        self.att_audio = nn.Linear(self.hidden_size * 4, self.max_text_length)
+        self.att_img = nn.Linear(self.hidden_size * 4, self.max_text_length)
 #         self.att_mm = nn.Linear(self.hidden_size * 6, self.max_text_length)
-        self.att_mm_audio = nn.Linear(self.hidden_size * 4, 1)
-        self.att_mm_img = nn.Linear(self.hidden_size * 4, 1)
+        self.att_mm_audio = nn.Linear(self.hidden_size * 4, self.max_text_length)
+        self.att_mm_img = nn.Linear(self.hidden_size * 4, self.max_text_length)
         self.att_combine = nn.Linear(self.hidden_size * 6, self.hidden_size * 2)
-        self.out = nn.Linear(self.hidden_size * 2, 1)
+        self.out = nn.Linear(self.hidden_size * 2, self.max_text_length)
 
 
     def forward(self, audio_aware_text, image_aware_text, hidden_gru, text_mask):
-        print('audio_aware_text {}'.format(audio_aware_text.size()))
-        attention_weights_audio = F.softmax(self.att_audio(torch.cat((audio_aware_text, hidden_gru), 2)), dim=2)
-        print('attention_weights_audio {}'.format(attention_weights_audio.size()))
-        attention_applied_audio = torch.bmm(torch.transpose(attention_weights_audio, 1, 2), audio_aware_text)
-        print('attention_applied_audio {}'.format(attention_applied_audio.size()))
-        attention_weights_img = F.softmax(self.att_img(torch.cat((image_aware_text, hidden_gru), 2)), dim=2)
-        attention_applied_img = torch.bmm(torch.transpose(attention_weights_img, 1, 2), image_aware_text)
+        out_distributions = []
 
-#         attention_weights_mm = F.softmax(self.att_mm(torch.cat((attention_applied_audio, attention_applied_img, hidden_gru), 2)), dim=1)
-        attention_weights_mm_audio = self.att_mm_audio(torch.cat((attention_applied_audio, hidden_gru), 2))
-        attention_weights_mm_img = self.att_mm_img(torch.cat((attention_applied_img, hidden_gru), 2))
-        print('attention_weights_mm_audio {}'.format(attention_weights_mm_audio.size()))
-#         attention_applied_mm = torch.bmm(attention_weights_mm, attention_applied_audio) + torch.bmm(attention_weights_mm, attention_applied_img)
-        attention_applied_mm = torch.bmm(attention_weights_mm_audio, attention_applied_audio) + torch.bmm(attention_weights_mm_img, attention_applied_img)
-        print('attention_applied_mm {}'.format(attention_applied_mm.size()))
+        for idx in range(self.max_text_length):
+            audio_aware_text_curr = audio_aware_text[:, idx, :]
+            image_aware_text_curr = image_aware_text[:, idx, :]
+            attention_weights_audio = F.softmax(self.att_audio(torch.cat((audio_aware_text_curr, hidden_gru), 2)), dim=2)
+            print('attention_weights_audio {}'.format(attention_weights_audio.size()))
+            attention_applied_audio = torch.bmm(torch.transpose(attention_weights_audio, 1, 2), audio_aware_text_curr)
+            print('attention_applied_audio {}'.format(attention_applied_audio.size()))
+            attention_weights_img = F.softmax(self.att_img(torch.cat((image_aware_text_curr, hidden_gru), 2)), dim=2)
+            attention_applied_img = torch.bmm(torch.transpose(attention_weights_img, 1, 2), image_aware_text_curr)
 
-        final_attention_weights = attention_weights_mm_audio[0]*attention_weights_audio[0] + attention_weights_mm_img[0]*attention_weights_img[0]
-        
-#         print('final_attention_weights: {}'.format(final_attention_weights.size()))
-        
-        final_out = torch.cat((audio_aware_text, image_aware_text, attention_applied_mm), 2)
-        final_out = self.att_combine(final_out)
-        final_out = F.relu(final_out)
-        final_out, hidden_gru = self.gru(final_out, hidden_gru)
-        final_out = masked_softmax(self.out(final_out), text_mask, log_softmax=False)    # TODO: apply masked softmax
-        return hidden_gru, final_out, final_attention_weights
+    #         attention_weights_mm = F.softmax(self.att_mm(torch.cat((attention_applied_audio, attention_applied_img, hidden_gru), 2)), dim=1)
+            attention_weights_mm_audio = self.att_mm_audio(torch.cat((attention_applied_audio, hidden_gru), 2))
+            attention_weights_mm_img = self.att_mm_img(torch.cat((attention_applied_img, hidden_gru), 2))
+            print('attention_weights_mm_audio {}'.format(attention_weights_mm_audio.size()))
+    #         attention_applied_mm = torch.bmm(attention_weights_mm, attention_applied_audio) + torch.bmm(attention_weights_mm, attention_applied_img)
+            attention_applied_mm = torch.bmm(attention_weights_mm_audio, attention_applied_audio) + torch.bmm(attention_weights_mm_img, attention_applied_img)
+            print('attention_applied_mm {}'.format(attention_applied_mm.size()))
+
+            final_attention_weights = attention_weights_mm_audio[0]*attention_weights_audio[0] + attention_weights_mm_img[0]*attention_weights_img[0]
+            
+    #         print('final_attention_weights: {}'.format(final_attention_weights.size()))
+            
+            final_out = torch.cat((audio_aware_text_curr, image_aware_text_curr, attention_applied_mm), 2)
+            final_out = self.att_combine(final_out)
+            final_out = F.relu(final_out)
+            final_out, hidden_gru = self.gru(final_out, hidden_gru)
+            final_out = masked_softmax(self.out(final_out), text_mask, log_softmax=False)    # TODO: apply masked softmax
+
+            out_distributions.append(final_out)
+
+        return out_distributions
 
     def initHidden(self):
-        return torch.zeros(1, self.max_text_length, self.hidden_size * 2)
+        return torch.zeros(1, 1, self.hidden_size * 2)
