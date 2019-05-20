@@ -105,10 +105,20 @@ class MMBiDAF(nn.Module):
         mod_text_audio = self.mod_t_a(text_audio_att, original_text_lengths)                        # (batch_size, num_sentences, 2 * hidden_size)
         mod_text_image = self.mod_t_i(text_image_att, original_text_lengths)                        # (batch_size, num_sentences, 2 * hidden_size)
 
-        if hidden_gru is None:
-            hidden_gru = self.multimodal_att_decoder.initHidden()
-            hidden_gru, final_out, sentence_dist = self.multimodal_att_decoder(mod_text_audio, mod_text_image, hidden_gru, text_mask)        # (batch_size, num_sentences, )
-        else:
-            hidden_gru, final_out, sentence_dist = self.multimodal_att_decoder(mod_text_audio, mod_text_image, hidden_gru, text_mask)
+        hidden_gru_list = []
+        final_out_list = []
+        sentence_dist_list= []
+        for _ in range(target_length):
+            if hidden_gru is None:
+                hidden_gru = self.multimodal_att_decoder.initHidden()
+                hidden_gru, final_out, sentence_dist = self.multimodal_att_decoder(mod_text_audio, mod_text_image, hidden_gru, text_mask)        # (batch_size, max_sentences, max_sentences)
+                hidden_gru_list.append(hidden_gru)
+                final_out_list.append(final_out)
+                sentence_dist_list.append(sentence_dist)
+            else:
+                hidden_gru, final_out, sentence_dist = self.multimodal_att_decoder(mod_text_audio, mod_text_image, hidden_gru, text_mask)
+                hidden_gru_list.append(hidden_gru)
+                final_out_list.append(final_out)
+                sentence_dist_list.append(sentence_dist)
 
         return hidden_gru, final_out, sentence_dist
