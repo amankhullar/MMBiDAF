@@ -113,7 +113,7 @@ class MMBiDAF(nn.Module):
 
         out_distributions = self.multimodal_att_decoder(mod_text_audio, mod_text_image, hidden_gru, text_mask)
 
-        print(len(out_distributions))
-        print(out_distributions[0].size())
+#         print(len(out_distributions))
+#         print(out_distributions[0].size())
 
         return out_distributions

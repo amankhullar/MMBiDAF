@@ -44,7 +44,7 @@ def main(course_dir, text_embedding_size, audio_embedding_size, hidden_size, dro
     model = MMBiDAF(hidden_size, text_embedding_size, audio_embedding_size, drop_prob, max_text_length)
 
     # Get optimizer and scheduler
-    optimizer = optim.Adadelta(model.parameters(), 1e-3)
+    optimizer = optim.Adadelta(model.parameters(), 1e-4)
     scheduler = sched.LambdaLR(optimizer, lambda s: 1.)  # Constant LR
 
     # Let's do this!
@@ -54,13 +54,15 @@ def main(course_dir, text_embedding_size, audio_embedding_size, hidden_size, dro
     hidden_state = None
     epoch = 0
     loss = 0
+    eps = 1e-8
 
     with torch.enable_grad(), tqdm(total=max(len(train_text_loader.dataset), len(train_image_loader.dataset), len(train_audio_loader.dataset))) as progress_bar:
         for (batch_text, original_text_length), batch_audio, batch_images, batch_target_indices in zip(train_text_loader, train_audio_loader, train_image_loader, train_target_loader):
+            loss = 0
             # Setup for forward
             batch_size = batch_text.size(0)
             optimizer.zero_grad()
-
+            epoch += 1
             # Required for debugging
             batch_text = batch_text.float()
             batch_audio = batch_audio.float()
@@ -71,22 +73,22 @@ def main(course_dir, text_embedding_size, audio_embedding_size, hidden_size, dro
             
             for batch, target_indices in enumerate(batch_target_indices):
                 for timestep, target_idx in enumerate(target_indices.squeeze(1)):
-                    print(target_idx)
+#                     print(target_idx)
                     prob = out_distributions[timestep][batch, int(target_idx)]
-                    print("Prob = {}".format(prob))
-                    loss += -1 * torch.log(prob)
-                    print("Loss = {}".format(loss))
+#                     print("Prob = {}".format(prob))
+                    loss += -1 * torch.log(prob + eps)
+#                     print("Loss = {}".format(loss))
 
             # Backward
-            loss.backward()
+            loss.backward(retain_graph=True)
             optimizer.step()
             scheduler.step()
-
+            print('Loss for Epoch {} : '.format(epoch))
             #     print(out_distributions)
-            print(len(out_distributions))
-            print(out_distributions[0].size())
-
-            break
+#             print(len(out_distributions))
+#             print(out_distributions[0].size())
+            print(loss)
+#             break
 
 
     
