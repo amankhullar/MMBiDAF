@@ -37,11 +37,11 @@ def document_vector(glove_model, doc):
     return np.mean(glove_model[doc], axis = 0)
 
 def generate_embeddings(path, glove_path, sentence_path):
-    num_files = len([item for item in os.listdir(path) if os.path.isfile(os.path.join(path, item)) and '.txt' in item])
-    for idx in range(1, num_files):
+    files = [item for item in os.listdir(path) if os.path.isfile(os.path.join(path, item)) and '.txt' in item]
+    for fname in files:
         lines = []
         try:
-            with open(path + str(idx) + ".txt") as f:
+            with open(path + fname) as f:
                 for line in f:
                     if re.match('\d+:\d+', line) is None:
                         line = line.replace('[MUSIC]', '')
@@ -65,9 +65,9 @@ def generate_embeddings(path, glove_path, sentence_path):
                 embedding_matrix[sentence_list] = sentence_embeddings
             
             # Save the embedding dictionary for faster loading
-            save_path = sentence_path + str(idx) + '.pt'
+            save_path = sentence_path + str(fname[:-4]) + '.pt'
             torch.save(embedding_matrix, save_path)
-
+            print("Saved embeddings for {}".format(path + fname))
         
 def download_data():
     """
@@ -81,7 +81,8 @@ def main(base_path, glove_path):
     for idx in range(1, num_courses):
         transcript_path = base_path + str(idx) + "/" + "transcripts/"
         sentence_path = base_path + str(idx) + '/' + 'sentence_features/'
-        os.system('mkdir ' + sentence_path)
+        if not os.path.exists(sentence_path):
+            os.system('mkdir ' + sentence_path)
         generate_embeddings(transcript_path, glove_path, sentence_path)
 
 if __name__ == "__main__":

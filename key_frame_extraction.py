@@ -28,17 +28,19 @@ def save_i_keyframes(video_fn, output_name):
     else:
         print ('No I-frames in '+video_fn)
 
-def get_frames(filename):
-    path = filename + "transcripts/"
-    num_files = len([item for item in os.listdir(path) if os.path.isfile(os.path.join(path, item)) and '.txt' in item])
-    for idx in range(1, num_files):
-        output_name = filename + 'video_key_frames/' + str(idx) + '/'
-        os.system('mkdir ' + output_name)
-        save_i_keyframes(filename + 'videos/' + str(idx) + '.mp4', output_name)
+def get_frames(cname):
+    path = cname + "videos/"
+    files = [item for item in os.listdir(path) if os.path.isfile(os.path.join(path, item)) and ('.mp4' in item and '_' not in item)]
+    for fname in files:
+        output_name = cname + 'video_key_frames/' + fname[:-4] + '/'
+        if not os.path.exists(output_name):
+            os.system('mkdir ' + output_name)
+        save_i_keyframes(path + fname, output_name)
         
 if __name__ == '__main__':
     num_courses = 25
     for idx in range(1, num_courses):
-        filename = base_path + str(idx) + '/'
-        os.system('mkdir ' + filename + 'video_key_frames/')
-        get_frames(filename)
+        cname = base_path + str(idx) + '/'
+        if not os.path.exists(os.path.join(cname, 'video_key_frames')):
+            os.system('mkdir ' + cname + 'video_key_frames/')
+        get_frames(cname)
