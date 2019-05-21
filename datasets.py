@@ -235,12 +235,30 @@ class TargetDataset(Dataset):
         else:
             target_text = ' '.join(lines)
 
-        target_text = target_text.lower()
+        # target_text = target_text.lower()
         target_sentences = sent_tokenize(target_text)
+        for idx2 in range(len(target_sentences)):
+            target_sentences[idx2] = target_sentences[idx2].lower()
 
         target_indices = []
         for target_sentence in target_sentences:
-            target_indices.append(torch.Tensor([source_sentences.index(target_sentence)]))
+            # target_indices.append(torch.Tensor([source_sentences.index(target_sentence)]))
+            try:
+                target_indices.append(torch.Tensor([self.get_index(source_sentences, target_sentence)]))
+            except Exception as e:
+                if False:
+                    print("Exception: " + str(e))
+                    print(self.target_sentences_path[idx])
+                    print(target_sentence)
+                    print('\n\n--------------------\n\n')
+                    print(source_sentences)
+                    print('\n-----------------------\n')
+                continue
         target_indices.append(torch.Tensor([len(source_sentences)]))                        # Appended the EOS token
         
         return torch.stack(target_indices)
+
+    def get_index(self, source_sentences, target_sentence):
+        for idx, sent in enumerate(source_sentences):
+            if target_sentence in sent:
+                return idx
