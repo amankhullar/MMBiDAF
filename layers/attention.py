@@ -110,7 +110,7 @@ class MultimodalAttentionDecoder(nn.Module):
         self.hidden_size = hidden_size
         self.drop_prob = drop_prob
         self.max_text_length = max_text_length
-        self.gru = nn.GRU(hidden_size * 2, hidden_size * 2)
+        self.gru = nn.GRU(hidden_size * 2, hidden_size * 2, batch_first=True)
         self.att_audio = nn.Linear(self.hidden_size * 4, self.max_text_length)
         self.att_img = nn.Linear(self.hidden_size * 4, self.max_text_length)
 #         self.att_mm = nn.Linear(self.hidden_size * 6, self.max_text_length)
