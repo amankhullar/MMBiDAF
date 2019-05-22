@@ -128,7 +128,7 @@ class MultimodalAttentionDecoder(nn.Module):
                 hidden_gru = self.initHidden()
             
             audio_aware_text_curr = audio_aware_text[:, idx:idx+1, :]
-            print(type(audio_aware_text_curr))
+#             print(type(audio_aware_text_curr))
             image_aware_text_curr = image_aware_text[:, idx:idx+1, :]
             attention_weights_audio = F.softmax(self.att_audio(torch.cat((audio_aware_text_curr, hidden_gru), 2)), dim=2)
             # print('attention_weights_audio {}'.format(attention_weights_audio.size()))
