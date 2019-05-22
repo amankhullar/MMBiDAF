@@ -20,7 +20,7 @@ import torchvision.transforms as transforms
 from datasets import *
 from models import MMBiDAF
 from PIL import Image
-from tensorboardX import SummaryWriter
+# from tensorboardX import SummaryWriter
 from tqdm import tqdm
 from ujson import load as json_load
 from nltk.tokenize import sent_tokenize
@@ -58,7 +58,7 @@ def main(course_dir, text_embedding_size, audio_embedding_size, hidden_size, dro
     eps = 1e-8
 
     with torch.enable_grad(), tqdm(total=max(len(train_text_loader.dataset), len(train_image_loader.dataset), len(train_audio_loader.dataset))) as progress_bar:
-        for (batch_text, original_text_length), batch_audio, batch_images, (batch_target_indices, _) in zip(train_text_loader, train_audio_loader, train_image_loader, train_target_loader):
+        for (batch_text, original_text_length), batch_audio, batch_images, (batch_target_indices, source_path, target_path) in zip(train_text_loader, train_audio_loader, train_image_loader, train_target_loader):
             loss = 0
             # Setup for forward
             batch_size = batch_text.size(0)
@@ -80,6 +80,11 @@ def main(course_dir, text_embedding_size, audio_embedding_size, hidden_size, dro
                     loss += -1 * torch.log(prob + eps)
 #                     print("Loss = {}".format(loss))
 
+            # Generate summary
+            print('Generated summary: ')
+            summary = get_generated_summary(out_distributions, original_text_length, source_path)
+            print(summary)
+
             # Backward
             loss.backward(retain_graph=True)
             optimizer.step()
@@ -92,7 +97,7 @@ def main(course_dir, text_embedding_size, audio_embedding_size, hidden_size, dro
 #             break
 
 
-def eval_train(course_dir, text_embedding_size, audio_embedding_size, hidden_size, drop_prob, max_text_length):
+def eval_train(course_dir, text_embedding_size, audio_embedding_size, hidden_size, drop_prob, max_text_length, model=None):
     hidden_state = None
     with torch.no_grad():
         # Get sentence embeddings
@@ -110,9 +115,10 @@ def eval_train(course_dir, text_embedding_size, audio_embedding_size, hidden_siz
         train_target_loader = torch.utils.data.DataLoader(TargetDataset(course_dir), batch_size = 1, shuffle = False, num_workers = 2)
 
         # Create model
-        model = MMBiDAF(hidden_size, text_embedding_size, audio_embedding_size, drop_prob, max_text_length)
+        if model is None:
+            model = MMBiDAF(hidden_size, text_embedding_size, audio_embedding_size, drop_prob, max_text_length)
 
-        for (batch_text, original_text_length), batch_audio, batch_images, (batch_target_indices, source_path) in zip(train_text_loader, train_audio_loader, train_image_loader, train_target_loader):
+        for (batch_text, original_text_length), batch_audio, batch_images, (batch_target_indices, source_path, target_path) in zip(train_text_loader, train_audio_loader, train_image_loader, train_target_loader):
             # Required for debugging
             batch_text = batch_text.float()
             batch_audio = batch_audio.float()
@@ -120,18 +126,27 @@ def eval_train(course_dir, text_embedding_size, audio_embedding_size, hidden_siz
 
             # Forward Summary Generation
             out_distributions = model(batch_text, original_text_length, batch_audio, torch.Tensor([batch_audio.size(1)]), batch_images, torch.Tensor([batch_images.size(1)]), hidden_state)
-            generated_summary = []
-            for timestep, probs in enumerate(out_distributions):
-                probs = probs.squeeze(0)
-                if(probs[int(original_text_length)] == torch.max(probs)):
-                    break
-                else:
-                    generated_summary.append(get_source_sentence(source_path[0], int(torch.max(probs, 0)[1])))
+            generated_summary = get_generated_summary(out_distributions, original_text_length, source_path)
 
             print('generated summary is :')
             print(generated_summary)
 
             # Rougue Score evaluation
+
+def get_generated_summary(out_distributions, original_text_length, source_path):
+    out_distributions = np.array([dist[0].cpu().detach().numpy() for dist in out_distributions])  # TODO: Batch 0
+    generated_summary = []
+    for timestep, probs in enumerate(out_distributions):
+        if(probs[int(original_text_length)] == np.argmax(probs)):
+            break
+        else:
+            max_prob_idx = np.argmax(probs, 0)
+            generated_summary.append(get_source_sentence(source_path[0], max_prob_idx))
+
+            # Setting the generated sentence's prob to zero in the remaining timesteps - coverage?
+            out_distributions[:, max_prob_idx] = 0
+    
+    return generated_summary
 
 def get_source_sentence(source_path, idx):
     lines = []
@@ -146,7 +161,8 @@ def get_source_sentence(source_path, idx):
     else:
         source_text = ' '.join(lines)
         source_sentences = sent_tokenize(source_text)
-        source_sentences = source_sentences.lower()
+        for i in range(len(source_sentences)):
+            source_sentences[i] = source_sentences[i].lower()
         return source_sentences[idx]
     
     
