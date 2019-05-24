@@ -1,6 +1,7 @@
 """
 Train a model on the MMS Dataset.
 """
+import copy
 import logging
 import os
 import pickle
@@ -9,6 +10,7 @@ from collections import OrderedDict
 from json import dumps
 
 import numpy as np
+import seaborn as sns
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -27,7 +29,7 @@ from ujson import load as json_load
 from nltk.tokenize import sent_tokenize
 
 
-def main(course_dir, text_embedding_size, audio_embedding_size, hidden_size, drop_prob, max_text_length, num_epochs=100):
+def main(course_dir, text_embedding_size, audio_embedding_size, hidden_size, drop_prob, max_text_length, out_heatmaps_dir, num_epochs=100):
     # Get sentence embeddings
     train_text_loader = torch.utils.data.DataLoader(TextDataset(course_dir, max_text_length), batch_size = 1, shuffle = False, num_workers = 2)
 
@@ -82,22 +84,29 @@ def main(course_dir, text_embedding_size, audio_embedding_size, hidden_size, dro
 #                     print("Loss = {}".format(loss))
 
             # Generate summary
-            print('Generated summary: ')
+            print('Generated summary for iteration {}: '.format(epoch))
             summary = get_generated_summary(out_distributions, original_text_length, source_path)
             print(summary)
             
             # Evaluation
+            rouge = Rouge()
             rouge_scores = rouge.get_scores(source_path, target_path, avg=True)
             print('Rouge score at iteration {} is {}: '.format(epoch, rouge_scores))
+
+            # Generate Output Heatmaps
+            sns.set()
+            for idx in range(len(out_distributions)):
+                out_distributions[idx] = out_distributions[idx].squeeze(0).detach().numpy()      # Converting each timestep distribution to numpy array
+            out_distributions = np.asarray(out_distributions)   # Converting the timestep list to array
+            ax = sns.heatmap(out_distributions)
+            fig = ax.get_figure()
+            fig.savefig(out_heatmaps_dir + str(epoch) + '.png')
 
             # Backward
             loss.backward(retain_graph=True)
             optimizer.step()
             scheduler.step()
             print('Loss for Epoch {} : '.format(epoch))
-            #     print(out_distributions)
-#             print(len(out_distributions))
-#             print(out_distributions[0].size())
             print(loss)
 #             break
 
@@ -143,4 +152,5 @@ if __name__ == '__main__':
     drop_prob = 0.2
     max_text_length = 405
     num_epochs = 100
-    main(course_dir, text_embedding_size, audio_embedding_size, hidden_size, drop_prob, max_text_length, num_epochs)
+    out_heatmaps_dir = '/home/amankhullar/model/output_heatmaps/'
+    main(course_dir, text_embedding_size, audio_embedding_size, hidden_size, drop_prob, max_text_length, out_heatmaps_dir, num_epochs)
