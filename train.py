@@ -20,6 +20,7 @@ import torchvision.transforms as transforms
 from datasets import *
 from models import MMBiDAF
 from PIL import Image
+from rouge import Rouge
 # from tensorboardX import SummaryWriter
 from tqdm import tqdm
 from ujson import load as json_load
@@ -84,6 +85,10 @@ def main(course_dir, text_embedding_size, audio_embedding_size, hidden_size, dro
             print('Generated summary: ')
             summary = get_generated_summary(out_distributions, original_text_length, source_path)
             print(summary)
+            
+            # Evaluation
+            rouge_scores = rouge.get_scores(source_path, target_path, avg=True)
+            print('Rouge score at iteration {} is {}: '.format(epoch, rouge_scores))
 
             # Backward
             loss.backward(retain_graph=True)
@@ -97,42 +102,6 @@ def main(course_dir, text_embedding_size, audio_embedding_size, hidden_size, dro
 #             break
 
 
-def eval_train(course_dir, text_embedding_size, audio_embedding_size, hidden_size, drop_prob, max_text_length, model=None):
-    hidden_state = None
-    with torch.no_grad():
-        # Get sentence embeddings
-        train_text_loader = torch.utils.data.DataLoader(TextDataset(course_dir, max_text_length), batch_size = 1, shuffle = False, num_workers = 2)
-
-        # Get Audio embeddings
-        train_audio_loader = torch.utils.data.DataLoader(AudioDataset(course_dir), batch_size = 1, shuffle = False, num_workers = 2)
-        
-        # Preprocess the image in prescribed format
-        normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-        transform = transforms.Compose([transforms.RandomResizedCrop(256), transforms.RandomHorizontalFlip(), transforms.ToTensor(), normalize,])
-        train_image_loader = torch.utils.data.DataLoader(ImageDataset(course_dir, transform), batch_size = 1, shuffle = False, num_workers = 2)
-
-        # Load Target text
-        train_target_loader = torch.utils.data.DataLoader(TargetDataset(course_dir), batch_size = 1, shuffle = False, num_workers = 2)
-
-        # Create model
-        if model is None:
-            model = MMBiDAF(hidden_size, text_embedding_size, audio_embedding_size, drop_prob, max_text_length)
-
-        for (batch_text, original_text_length), batch_audio, batch_images, (batch_target_indices, source_path, target_path) in zip(train_text_loader, train_audio_loader, train_image_loader, train_target_loader):
-            # Required for debugging
-            batch_text = batch_text.float()
-            batch_audio = batch_audio.float()
-            batch_images = batch_images.float()
-
-            # Forward Summary Generation
-            out_distributions = model(batch_text, original_text_length, batch_audio, torch.Tensor([batch_audio.size(1)]), batch_images, torch.Tensor([batch_images.size(1)]), hidden_state)
-            generated_summary = get_generated_summary(out_distributions, original_text_length, source_path)
-
-            print('generated summary is :')
-            print(generated_summary)
-
-            # Rougue Score evaluation
-
 def get_generated_summary(out_distributions, original_text_length, source_path):
     out_distributions = np.array([dist[0].cpu().detach().numpy() for dist in out_distributions])  # TODO: Batch 0
     generated_summary = []
@@ -141,7 +110,7 @@ def get_generated_summary(out_distributions, original_text_length, source_path):
             break
         else:
             max_prob_idx = np.argmax(probs, 0)
-            generated_summary.append(get_source_sentence(source_path[0], max_prob_idx))
+            generated_summary.append(get_source_sentence(source_path[0], max_prob_idx-1))
 
             # Setting the generated sentence's prob to zero in the remaining timesteps - coverage?
             out_distributions[:, max_prob_idx] = 0
