@@ -127,34 +127,34 @@ class MultimodalAttentionDecoder(nn.Module):
             if hidden_gru is None:
                 hidden_gru = self.initHidden()
             
-            audio_aware_text_curr = audio_aware_text[:, idx:idx+1, :]
+            audio_aware_text_curr = audio_aware_text[:, idx:idx+1, :]   # (batch_size, 1, 2 * hidden_size)
 #             print(type(audio_aware_text_curr))
-            image_aware_text_curr = image_aware_text[:, idx:idx+1, :]
-            attention_weights_audio = F.softmax(self.att_audio(torch.cat((audio_aware_text_curr, hidden_gru), 2)), dim=2)
+            image_aware_text_curr = image_aware_text[:, idx:idx+1, :]   # (batch_size, 1, 2 * hidden_size)
+            attention_weights_audio = F.softmax(self.att_audio(torch.cat((audio_aware_text_curr, hidden_gru), 2)), dim=2)   # (batch_size, 1, max_text_length)
             # print('attention_weights_audio {}'.format(attention_weights_audio.size()))
-            attention_applied_audio = torch.bmm(attention_weights_audio, audio_aware_text)
+            attention_applied_audio = torch.bmm(attention_weights_audio, audio_aware_text)  # (batch_size, 1, 2 * hidden_size)
             # print('attention_applied_audio {}'.format(attention_applied_audio.size()))
-            attention_weights_img = F.softmax(self.att_img(torch.cat((image_aware_text_curr, hidden_gru), 2)), dim=2)
-            attention_applied_img = torch.bmm(attention_weights_img, image_aware_text)
+            attention_weights_img = F.softmax(self.att_img(torch.cat((image_aware_text_curr, hidden_gru), 2)), dim=2)   # (batch_size, 1, max_text_length)
+            attention_applied_img = torch.bmm(attention_weights_img, image_aware_text)  # (batch_size, 1, 2 * hidden_size)
 
     #         attention_weights_mm = F.softmax(self.att_mm(torch.cat((attention_applied_audio, attention_applied_img, hidden_gru), 2)), dim=1)
-            attention_weights_mm_audio = F.softmax(self.att_mm_audio(torch.cat((attention_applied_audio, hidden_gru), 2)), dim=2)
+            attention_weights_mm_audio = F.softmax(self.att_mm_audio(torch.cat((attention_applied_audio, hidden_gru), 2)), dim=2)   # (batch_size, 1, 1)
             # print('attention_weights_mm_audio {}'.format(attention_weights_mm_audio.size()))
-            attention_weights_mm_img = F.softmax(self.att_mm_img(torch.cat((attention_applied_img, hidden_gru), 2)), dim=2)
+            attention_weights_mm_img = F.softmax(self.att_mm_img(torch.cat((attention_applied_img, hidden_gru), 2)), dim=2)     # (batch_size, 1, 1)
             # print('attention_weights_mm_audio {}'.format(attention_weights_mm_audio.size()))
     #         attention_applied_mm = torch.bmm(attention_weights_mm, attention_applied_audio) + torch.bmm(attention_weights_mm, attention_applied_img)
-            attention_applied_mm = torch.bmm(attention_weights_mm_audio, attention_applied_audio) + torch.bmm(attention_weights_mm_img, attention_applied_img)
+            attention_applied_mm = torch.bmm(attention_weights_mm_audio, attention_applied_audio) + torch.bmm(attention_weights_mm_img, attention_applied_img)  # (batch_size, 1, 2 * hidden_size) 
             # print('attention_applied_mm {}'.format(attention_applied_mm.size()))
 
             final_attention_weights = attention_weights_mm_audio[0]*attention_weights_audio[0] + attention_weights_mm_img[0]*attention_weights_img[0]
             
     #         print('final_attention_weights: {}'.format(final_attention_weights.size()))
             
-            final_out = torch.cat((audio_aware_text_curr, image_aware_text_curr, attention_applied_mm), 2)
-            final_out = self.att_combine(final_out)
+            final_out = torch.cat((audio_aware_text_curr, image_aware_text_curr, attention_applied_mm), 2)      # (batch_size, 1, 6 * hidden_size)
+            final_out = self.att_combine(final_out)     # (batch_size, 1, 2 * hidden_size)
             final_out = F.relu(final_out)
-            final_out, hidden_gru = self.gru(final_out, hidden_gru)
-            final_out = masked_softmax(self.out(final_out), text_mask, log_softmax=False)
+            final_out, hidden_gru = self.gru(final_out, hidden_gru)     # (batch_size, 1, 2 * hidden_size)
+            final_out = masked_softmax(self.out(final_out), text_mask, log_softmax=False)       # (batch_size, 1, max_text_length)
 
             final_out = final_out.squeeze(1)
             out_distributions.append(final_out)
