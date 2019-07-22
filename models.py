@@ -68,9 +68,11 @@ class MMBiDAF(nn.Module):
                                          num_layers=2,
                                          drop_prob=drop_prob)
 
-        self.multimodal_att_decoder = MultimodalAttentionDecoder(hidden_size,
+        self.multimodal_att_decoder = MultimodalAttentionDecoder(2 * hidden_size,
+                                                                 hidden_size,
                                                                  max_text_length,
-                                                                 drop_prob)
+                                                                 num_layers=1,
+                                                                 dropout=0.1)
 
 
     def forward(self, embedded_text, original_text_lengths, embedded_audio, original_audio_lengths, transformed_images, original_image_lengths, hidden_gru=None):
@@ -105,10 +107,12 @@ class MMBiDAF(nn.Module):
         mod_text_audio = self.mod_t_a(text_audio_att, original_text_lengths)                        # (batch_size, num_sentences, 2 * hidden_size)
         mod_text_image = self.mod_t_i(text_image_att, original_text_lengths)                        # (batch_size, num_sentences, 2 * hidden_size)
 
-        if hidden_gru is None:
-            hidden_gru = self.multimodal_att_decoder.initHidden()
-            hidden_gru, final_out, sentence_dist = self.multimodal_att_decoder(mod_text_audio, mod_text_image, hidden_gru, text_mask)        # (batch_size, num_sentences, )
-        else:
-            hidden_gru, final_out, sentence_dist = self.multimodal_att_decoder(mod_text_audio, mod_text_image, hidden_gru, text_mask)
+        # if hidden_gru is None:
+        #     hidden_gru = self.multimodal_att_decoder.initHidden()
+        #     hidden_gru, final_out, sentence_dist = self.multimodal_att_decoder(mod_text_audio, mod_text_image, hidden_gru, text_mask)        # (batch_size, num_sentences, )
+        # else:
+        #     hidden_gru, final_out, sentence_dist = self.multimodal_att_decoder(mod_text_audio, mod_text_image, hidden_gru, text_mask)
 
-        return hidden_gru, final_out, sentence_dist
+        # return hidden_gru, final_out, sentence_dist
+
+        c3 = self.multimodal_att_decoder()

@@ -128,16 +128,19 @@ class MultimodalAttentionDecoder(nn.Module):
         # self.tanh2 = nn.Tanh()
 
         # For multimodal attention
-        self.W5 = nn.Linear(2 * self.hidden_size, 2 * self.hidden_size)
-        self.W6 = nn.Linear(2 * self.hidden_size, 2 * self.hidden_size)
-        self.v3 = nn.Linear(2 * hidden_size, 1)
+        self.W_beta_1 = nn.Linear(2 * self.hidden_size, 2 * self.hidden_size)       # the decoder hidden size should be 2 * hidden_size at every timestep (For decoder hidden state)
+        self.W_beta_2 = nn.Linear(2 * self.hidden_size, 2 * self.hidden_size)       # Linear layer c1
+        self.W_beta_3 = nn.Linear(2 * self.hidden_size, 2 * self.hidden_size)       # the decoder hidden size should be 2 * hidden_size at every timestep (For decoder hidden state)
+        self.W_beta_4 = nn.Linear(2 * self.hidden_size, 2 * self.hidden_size)       # Linear layer c2
+        self.v_beta_1 = nn.Linear(2 * hidden_size, 1)
+        self.v_beta_2 = nn.Linear(2 * hidden_size, 1)
 
         # For the output layer
         self.sentence_embedding 
         self.lstm = nn.LSTM(self.input_size + self.sentence_embedding, self.hidden_size, self.num_layers)
         self.out = nn.Linear(self.hidden_size, self.output_size)
 
-    def forward(self, in_sent_embed, initial_decoder_hidden, text_audio_enc_out, final_text_audio_enc_hidden, text_img_enc_out, final_text_img_enc_hidden):
+    def forward(self, sent_embed, decoder_hidden, text_audio_enc_out, final_text_audio_enc_hidden, text_img_enc_out, final_text_img_enc_hidden): # TODO : Add in_sent_embed (The initial start of summary embedding)
         # For the text-audio attention
         e1 = self.v1(self.tanh(self.W1(text_audio_enc_out) + self.W2(final_text_audio_enc_hidden)))
         att_weights_1 = F.softmax(e1, dim=1)
@@ -151,6 +154,13 @@ class MultimodalAttentionDecoder(nn.Module):
         c2 = torch.sum(c2, dim=1)       # (batch, 2 * hidden_size)
 
         # For the multimodal attention
-        e3 = self.v3(self.tanh(self.W5(c1) + self.W2(c2)))      # (batch, 1)
-        c3 = e3 * c1 + e3 * c2              # (batch, 2 * hidden_size)
-        
+        # e3 = self.v3(self.tanh(self.W5(c1) + self.W2(c2)))      # (batch, 1)
+        # c3 = e3 * c1 + e3 * c2              # (batch, 2 * hidden_size)
+        e_beta_1 = self.v_beta_1(self.tanh(self.W_beta_1(c1) + self.W_beta_2(decoder_hidden)))  # (batch, 1)
+        beta_1 = e_beta_1 * c1
+
+        e_beta_2 = self.v_beta_2(self.tanh(self.W_beta_3(c2) + self.W_beta_4(decoder_hidden)))  # (batch, 1)
+        beta_2 = e_beta_2 * c2
+
+        c3 = beta_1 + beta_2
+        return c3
