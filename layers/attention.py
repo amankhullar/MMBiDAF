@@ -98,4 +98,59 @@ def masked_softmax(logits, mask, dim=-1, log_softmax=False):
     return probs
 
 class MultimodalAttentionDecoder(nn.Module):
+    """
+    Multimodal Attention decoder class
+    Parameters : 
+    input_size (The Modality layer output) : (batch, max_seq_len, 2*hidden_size)
+    hidden_size (The decoder output dimension) : (batch, 1, hidden_size) where hidden size is the that of the decoder
+    output_size (The size of the input sentences with padding) : (batch, max_seq_len)
+    num_layers (The number of layers of the decoder)
+    dropout (The dropout after the decoder)
+    """
+    def __init__(self, input_size, hidden_size, output_size, num_layers=1, dropout=0.1):
+        super(MultimodalAttentionDecoder, self).__init__()
+        self.input_size = input_size
+        self.hidden_size = hidden_size
+        self.output_size = output_size
+        self.num_layers = num_layers
+        self.dropout = dropout
 
+        # For text-audio attention
+        self.W1 = nn.Linear(2 * self.hidden_size, 2 * self.hidden_size)
+        self.W2 = nn.Linear(2 * self.hidden_size, 2 * self.hidden_size)
+        self.v1 = nn.Linear(2 * self.hidden_size, 1)
+        self.tanh = nn.Tanh()
+
+        # For text-image attention
+        self.W3 = nn.Linear(2 * self.hidden_size, 2 * self.hidden_size)
+        self.W4 = nn.Linear(2 * self.hidden_size, 2 * self.hidden_size)
+        self.v2 = nn.Linear(2 * self.hidden_size, 1)
+        # self.tanh2 = nn.Tanh()
+
+        # For multimodal attention
+        self.W5 = nn.Linear(2 * self.hidden_size, 2 * self.hidden_size)
+        self.W6 = nn.Linear(2 * self.hidden_size, 2 * self.hidden_size)
+        self.v3 = nn.Linear(2 * hidden_size, 1)
+
+        # For the output layer
+        self.sentence_embedding 
+        self.lstm = nn.LSTM(self.input_size + self.sentence_embedding, self.hidden_size, self.num_layers)
+        self.out = nn.Linear(self.hidden_size, self.output_size)
+
+    def forward(self, in_sent_embed, initial_decoder_hidden, text_audio_enc_out, final_text_audio_enc_hidden, text_img_enc_out, final_text_img_enc_hidden):
+        # For the text-audio attention
+        e1 = self.v1(self.tanh(self.W1(text_audio_enc_out) + self.W2(final_text_audio_enc_hidden)))
+        att_weights_1 = F.softmax(e1, dim=1)
+        c1 = att_weights_1 * text_audio_enc_out
+        c1 = torch.sum(c1, dim=1)       # (batch, 2 * hidden_size)
+
+        # For the text-image attention
+        e2 = self.v2(self.tanh(self.W3(text_img_enc_out) + self.W4(final_text_img_enc_hidden)))
+        att_weights_2 = F.softmax(e2, dim=1)
+        c2 = att_weights_2 * text_img_enc_out
+        c2 = torch.sum(c2, dim=1)       # (batch, 2 * hidden_size)
+
+        # For the multimodal attention
+        e3 = self.v3(self.tanh(self.W5(c1) + self.W2(c2)))      # (batch, 1)
+        c3 = e3 * c1 + e3 * c2              # (batch, 2 * hidden_size)
+        
