@@ -136,19 +136,18 @@ class MultimodalAttentionDecoder(nn.Module):
         self.v_beta_2 = nn.Linear(2 * hidden_size, 1)
 
         # For the output layer
-        self.sentence_embedding 
-        self.lstm = nn.LSTM(self.input_size + self.sentence_embedding, self.hidden_size, self.num_layers)
+        self.lstm = nn.LSTM(self.input_size + 2*self.hidden_size, self.hidden_size, self.num_layers)
         self.out = nn.Linear(self.hidden_size, self.output_size)
 
     def forward(self, sent_embed, decoder_hidden, text_audio_enc_out, final_text_audio_enc_hidden, text_img_enc_out, final_text_img_enc_hidden): # TODO : Add in_sent_embed (The initial start of summary embedding)
         # For the text-audio attention
-        e1 = self.v1(self.tanh(self.W1(text_audio_enc_out) + self.W2(final_text_audio_enc_hidden)))
-        att_weights_1 = F.softmax(e1, dim=1)
-        c1 = att_weights_1 * text_audio_enc_out
-        c1 = torch.sum(c1, dim=1)       # (batch, 2 * hidden_size)
+        e1 = self.v1(self.tanh(self.W1(text_audio_enc_out) + self.W2(decoder_hidden))) # (batch, max_seq_len, 1)
+        att_weights_1 = F.softmax(e1, dim=1)        # (batch, max_seq_len, 1)
+        c1 = att_weights_1 * text_audio_enc_out     # (batch, max_seq_len, 2 * hidden_size)
+        c1 = torch.sum(c1, dim=1)                   # (batch, 2 * hidden_size)
 
         # For the text-image attention
-        e2 = self.v2(self.tanh(self.W3(text_img_enc_out) + self.W4(final_text_img_enc_hidden)))
+        e2 = self.v2(self.tanh(self.W3(text_img_enc_out) + self.W4(decoder_hidden)))
         att_weights_2 = F.softmax(e2, dim=1)
         c2 = att_weights_2 * text_img_enc_out
         c2 = torch.sum(c2, dim=1)       # (batch, 2 * hidden_size)
@@ -157,10 +156,13 @@ class MultimodalAttentionDecoder(nn.Module):
         # e3 = self.v3(self.tanh(self.W5(c1) + self.W2(c2)))      # (batch, 1)
         # c3 = e3 * c1 + e3 * c2              # (batch, 2 * hidden_size)
         e_beta_1 = self.v_beta_1(self.tanh(self.W_beta_1(c1) + self.W_beta_2(decoder_hidden)))  # (batch, 1)
-        beta_1 = e_beta_1 * c1
+        beta_1 = e_beta_1 * c1          # (batch, 2 * hidden_size)
 
         e_beta_2 = self.v_beta_2(self.tanh(self.W_beta_3(c2) + self.W_beta_4(decoder_hidden)))  # (batch, 1)
-        beta_2 = e_beta_2 * c2
+        beta_2 = e_beta_2 * c2          # (batch, 2 * hidden_size)
 
-        c3 = beta_1 + beta_2
-        return c3
+        c3 = beta_1 + beta_2            # (batch, 2 * hidden_size)
+        
+        # TODO : add the LSTM and output linear layer
+
+        return c3                   
