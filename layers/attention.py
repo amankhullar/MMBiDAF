@@ -159,14 +159,14 @@ class MultimodalAttentionDecoder(nn.Module):
         beta_1 = e_beta_1 * c1          # (batch, num_dir*num_layers, 2 * hidden_size)
         beta_1 = torch.sum(beta_1, dim=1)       # (batch, 2 * hidden_size)
 
-        e_beta_2 = self.v_beta_2(self.tanh(self.W_beta_3(c2.unsqueez(1)) + self.W_beta_4(decoder_hidden)))  # (batch, num_dir*num_layers, 1)
+        e_beta_2 = self.v_beta_2(self.tanh(self.W_beta_3(c2.unsqueeze(1)) + self.W_beta_4(decoder_hidden)))  # (batch, num_dir*num_layers, 1)
         beta_2 = e_beta_2 * c2          # (batch, num_layers*num_dir, 2 * hidden_size)
         beta_2 = torch.sum(beta_2, dim=1)   # (batch, 2 * hidden_size)
 
         c3 = beta_1*c1 + beta_2*c2            # (batch, 2 * hidden_size)
         
         # TODO : add the LSTM and output linear layer
-        cat_input = torch.cat((c3.unsqueeze(1) + sent_embed), dim=2)        # (batch, 1, 2*hidden_size + text_embedding_size)
+        cat_input = torch.cat((c3.unsqueeze(1), sent_embed), dim=2)        # (batch, 1, 2*hidden_size + text_embedding_size)
 
         decoder_out, _ = self.lstm(cat_input)           # (batch, 1, hidden_size)
         decoder_out = decoder_out.view(-1, decoder_out.size(-1))    # (batch*1, hidden_size)
