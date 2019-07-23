@@ -101,15 +101,15 @@ class MultimodalAttentionDecoder(nn.Module):
     """
     Multimodal Attention decoder class
     Parameters : 
-    input_size (The Modality layer output) : (batch, max_seq_len, 2*hidden_size)
+    text_embedding_size (The Modality layer output) : (batch, max_seq_len, 2*hidden_size)
     hidden_size (The decoder output dimension) : (batch, 1, hidden_size) where hidden size is the that of the decoder
     output_size (The size of the input sentences with padding) : (batch, max_seq_len)
     num_layers (The number of layers of the decoder)
     dropout (The dropout after the decoder)
     """
-    def __init__(self, input_size, hidden_size, output_size, num_layers=1, dropout=0.1):
+    def __init__(self, text_embedding_size, hidden_size, output_size, num_layers=1, dropout=0.1):
         super(MultimodalAttentionDecoder, self).__init__()
-        self.input_size = input_size
+        self.text_embedding_size = text_embedding_size
         self.hidden_size = hidden_size
         self.output_size = output_size
         self.num_layers = num_layers
@@ -136,10 +136,10 @@ class MultimodalAttentionDecoder(nn.Module):
         self.v_beta_2 = nn.Linear(2 * hidden_size, 1)
 
         # For the output layer
-        self.lstm = nn.LSTM(self.input_size + 2*self.hidden_size, self.hidden_size, self.num_layers)
+        self.lstm = nn.LSTM(self.text_embedding_size + 2*self.hidden_size, self.hidden_size, self.num_layers)
         self.out = nn.Linear(self.hidden_size, self.output_size)
 
-    def forward(self, sent_embed, decoder_hidden, text_audio_enc_out, final_text_audio_enc_hidden, text_img_enc_out, final_text_img_enc_hidden): # TODO : Add in_sent_embed (The initial start of summary embedding)
+    def forward(self, sent_embed, decoder_hidden, text_audio_enc_out, final_text_audio_enc_hidden, text_img_enc_out, final_text_img_enc_hidden): # TODO : sent_embed : (batch, 1, text_embedding_size)
         # For the text-audio attention
         e1 = self.v1(self.tanh(self.W1(text_audio_enc_out) + self.W2(decoder_hidden))) # (batch, max_seq_len, 1)
         att_weights_1 = F.softmax(e1, dim=1)        # (batch, max_seq_len, 1)
@@ -164,5 +164,12 @@ class MultimodalAttentionDecoder(nn.Module):
         c3 = beta_1 + beta_2            # (batch, 2 * hidden_size)
         
         # TODO : add the LSTM and output linear layer
+        cat_input = torch.cat((c3.unsqueeze(1) + sent_embed), dim=2)        # (batch, 1, 2*hidden_size + text_embedding_size)
 
-        return c3                   
+        decoder_out, _ = self.lstm(cat_input)           # (batch, 1, hidden_size)
+        decoder_out = decoder_out.view(-1, decoder_out.size(-1))
+
+        final_out = self.out(decoder_out)
+
+        return final_out
+              
