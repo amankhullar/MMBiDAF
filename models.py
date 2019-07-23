@@ -25,7 +25,7 @@ class MMBiDAF(nn.Module):
         drop_prob (float) : Dropout probability.
     """
 
-    def __init__(self, hidden_size, text_embedding_size, audio_embedding_size, drop_prob=0., max_text_length=405):
+    def __init__(self, hidden_size, text_embedding_size, audio_embedding_size, drop_prob=0., max_transcript_length=405):
         super(MMBiDAF, self).__init__()
         self.emb = Embedding(embedding_size=text_embedding_size,
                              hidden_size=hidden_size,
@@ -68,9 +68,10 @@ class MMBiDAF(nn.Module):
                                          num_layers=2,
                                          drop_prob=drop_prob)
 
-        self.multimodal_att_decoder = MultimodalAttentionDecoder(hidden_size,
-                                                                 max_text_length,
-                                                                 drop_prob)
+        self.multimodal_att_decoder = MultimodalAttentionDecoder(text_embedding_size,
+                                                                 hidden_size,
+                                                                 max_transcript_length,
+                                                                 num_layers=1)
 
 
     def forward(self, embedded_text, original_text_lengths, embedded_audio, original_audio_lengths, transformed_images, original_image_lengths, hidden_gru=None):
