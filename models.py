@@ -61,12 +61,12 @@ class MMBiDAF(nn.Module):
 
         self.mod_t_a = RNNEncoder(input_size=8*hidden_size,
                                          hidden_size=hidden_size,
-                                         num_layers=1,          # changed the number of layers for decoder attention
+                                         num_layers=2,          # changed the number of layers for decoder attention
                                          drop_prob=drop_prob)
 
         self.mod_t_i = RNNEncoder(input_size=8*hidden_size,
                                          hidden_size=hidden_size,
-                                         num_layers=1,
+                                         num_layers=2,
                                          drop_prob=drop_prob)
 
         self.multimodal_att_decoder = MultimodalAttentionDecoder(text_embedding_size,
@@ -104,8 +104,8 @@ class MMBiDAF(nn.Module):
         text_audio_att = self.bidaf_att_audio(text_encoded, audio_encoded, text_mask, audio_mask)   # (batch_size, num_sentences, 8 * hidden_size)
         text_image_att = self.bidaf_att_image(text_encoded, image_encoded, text_mask, image_mask)   # (batch_size, num_sentences, 8 * hidden_size)
 
-        mod_text_audio = self.mod_t_a(text_audio_att, original_text_lengths)                        # (batch_size, num_sentences, hidden_size)
-        mod_text_image = self.mod_t_i(text_image_att, original_text_lengths)                        # (batch_size, num_sentences, hidden_size)
+        mod_text_audio = self.mod_t_a(text_audio_att, original_text_lengths)                        # (batch_size, num_sentences, 2 * hidden_size)
+        mod_text_image = self.mod_t_i(text_image_att, original_text_lengths)                        # (batch_size, num_sentences, 2 * hidden_size)
 
         # if hidden_gru is None:
         #     hidden_gru = self.multimodal_att_decoder.initHidden()
