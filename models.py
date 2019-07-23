@@ -1,3 +1,4 @@
+import sys
 import numpy as np
 import torch
 from layers.encoding import *
@@ -60,12 +61,12 @@ class MMBiDAF(nn.Module):
 
         self.mod_t_a = RNNEncoder(input_size=8*hidden_size,
                                          hidden_size=hidden_size,
-                                         num_layers=2,
+                                         num_layers=1,          # changed the number of layers for decoder attention
                                          drop_prob=drop_prob)
 
         self.mod_t_i = RNNEncoder(input_size=8*hidden_size,
                                          hidden_size=hidden_size,
-                                         num_layers=2,
+                                         num_layers=1,
                                          drop_prob=drop_prob)
 
         self.multimodal_att_decoder = MultimodalAttentionDecoder(text_embedding_size,
@@ -103,8 +104,8 @@ class MMBiDAF(nn.Module):
         text_audio_att = self.bidaf_att_audio(text_encoded, audio_encoded, text_mask, audio_mask)   # (batch_size, num_sentences, 8 * hidden_size)
         text_image_att = self.bidaf_att_image(text_encoded, image_encoded, text_mask, image_mask)   # (batch_size, num_sentences, 8 * hidden_size)
 
-        mod_text_audio = self.mod_t_a(text_audio_att, original_text_lengths)                        # (batch_size, num_sentences, 2 * hidden_size)
-        mod_text_image = self.mod_t_i(text_image_att, original_text_lengths)                        # (batch_size, num_sentences, 2 * hidden_size)
+        mod_text_audio = self.mod_t_a(text_audio_att, original_text_lengths)                        # (batch_size, num_sentences, hidden_size)
+        mod_text_image = self.mod_t_i(text_image_att, original_text_lengths)                        # (batch_size, num_sentences, hidden_size)
 
         # if hidden_gru is None:
         #     hidden_gru = self.multimodal_att_decoder.initHidden()
@@ -112,8 +113,10 @@ class MMBiDAF(nn.Module):
         # else:
         #     hidden_gru, final_out, sentence_dist = self.multimodal_att_decoder(mod_text_audio, mod_text_image, hidden_gru, text_mask)
 
-        out_distributions = self.multimodal_att_decoder(mod_text_audio, mod_text_image, hidden_gru, text_mask)
+        out_distributions = self.multimodal_att_decoder(torch.zeros(1, 1, 300), torch.randn(1, 1, 100), mod_text_audio, mod_text_image)      # (torch.zeros : Represents teh start of summary token but needs to be changed for batch size and correct embedding instead of zeros)
 
+        print(out_distributions.size())
+        sys.exit()              # Debugging purpose
 #         print(len(out_distributions))
 #         print(out_distributions[0].size())
 
