@@ -99,67 +99,70 @@ def masked_softmax(logits, mask, dim=-1, log_softmax=False):
 
 class MultimodalAttentionDecoder(nn.Module):
     """
-    Used to calculate the hierarchical attention of the image/audio aware text vectors
-    The code is inspired from the PyTorch tutorials : 
-    https://pytorch.org/tutorials/intermediate/seq2seq_translation_tutorial.html
-    Args:
-        hidden_size (int) : The hidden size of the input features
+    Multimodal Attention decoder class
+    Parameters : 
+    input_size (The Modality layer output) : (batch, max_seq_len, 2*hidden_size)
+    hidden_size (The decoder output dimension) : (batch, 1, hidden_size) where hidden size is the that of the decoder
+    output_size (The size of the input sentences with padding) : (batch, max_seq_len)
+    num_layers (The number of layers of the decoder)
+    dropout (The dropout after the decoder)
     """
-    def __init__(self, hidden_size, max_text_length, drop_prob=0.1):
+    def __init__(self, input_size, hidden_size, output_size, num_layers=1, dropout=0.1):
         super(MultimodalAttentionDecoder, self).__init__()
+        self.input_size = input_size
         self.hidden_size = hidden_size
-        self.drop_prob = drop_prob
-        self.max_text_length = max_text_length
-        self.gru = nn.GRU(hidden_size * 2, hidden_size * 2, batch_first=True)
-        self.att_audio = nn.Linear(self.hidden_size * 4, self.max_text_length)
-        self.att_img = nn.Linear(self.hidden_size * 4, self.max_text_length)
-#         self.att_mm = nn.Linear(self.hidden_size * 6, self.max_text_length)
-        self.att_mm_audio = nn.Linear(self.hidden_size * 4, 1)
-        self.att_mm_img = nn.Linear(self.hidden_size * 4, 1)
-        self.att_combine = nn.Linear(self.hidden_size * 6, self.hidden_size * 2)
-        self.out = nn.Linear(self.hidden_size * 2, self.max_text_length)
+        self.output_size = output_size
+        self.num_layers = num_layers
+        self.dropout = dropout
 
+        # For text-audio attention
+        self.W1 = nn.Linear(2 * self.hidden_size, 2 * self.hidden_size)
+        self.W2 = nn.Linear(2 * self.hidden_size, 2 * self.hidden_size)
+        self.v1 = nn.Linear(2 * self.hidden_size, 1)
+        self.tanh = nn.Tanh()
 
-    def forward(self, audio_aware_text, image_aware_text, hidden_gru, text_mask):
-        out_distributions = []
+        # For text-image attention
+        self.W3 = nn.Linear(2 * self.hidden_size, 2 * self.hidden_size)
+        self.W4 = nn.Linear(2 * self.hidden_size, 2 * self.hidden_size)
+        self.v2 = nn.Linear(2 * self.hidden_size, 1)
+        # self.tanh2 = nn.Tanh()
 
-        for idx in range(self.max_text_length):
-            if hidden_gru is None:
-                hidden_gru = self.initHidden()
-            
-            audio_aware_text_curr = audio_aware_text[:, idx:idx+1, :]   # (batch_size, 1, 2 * hidden_size)
-#             print(type(audio_aware_text_curr))
-            image_aware_text_curr = image_aware_text[:, idx:idx+1, :]   # (batch_size, 1, 2 * hidden_size)
-            attention_weights_audio = F.softmax(self.att_audio(torch.cat((audio_aware_text_curr, hidden_gru), 2)), dim=2)   # (batch_size, 1, max_text_length)
-            # print('attention_weights_audio {}'.format(attention_weights_audio.size()))
-            attention_applied_audio = torch.bmm(attention_weights_audio, audio_aware_text)  # (batch_size, 1, 2 * hidden_size)
-            # print('attention_applied_audio {}'.format(attention_applied_audio.size()))
-            attention_weights_img = F.softmax(self.att_img(torch.cat((image_aware_text_curr, hidden_gru), 2)), dim=2)   # (batch_size, 1, max_text_length)
-            attention_applied_img = torch.bmm(attention_weights_img, image_aware_text)  # (batch_size, 1, 2 * hidden_size)
+        # For multimodal attention
+        self.W_beta_1 = nn.Linear(2 * self.hidden_size, 2 * self.hidden_size)       # the decoder hidden size should be 2 * hidden_size at every timestep (For decoder hidden state)
+        self.W_beta_2 = nn.Linear(2 * self.hidden_size, 2 * self.hidden_size)       # Linear layer c1
+        self.W_beta_3 = nn.Linear(2 * self.hidden_size, 2 * self.hidden_size)       # the decoder hidden size should be 2 * hidden_size at every timestep (For decoder hidden state)
+        self.W_beta_4 = nn.Linear(2 * self.hidden_size, 2 * self.hidden_size)       # Linear layer c2
+        self.v_beta_1 = nn.Linear(2 * hidden_size, 1)
+        self.v_beta_2 = nn.Linear(2 * hidden_size, 1)
 
-    #         attention_weights_mm = F.softmax(self.att_mm(torch.cat((attention_applied_audio, attention_applied_img, hidden_gru), 2)), dim=1)
-            attention_weights_mm_audio = F.softmax(self.att_mm_audio(torch.cat((attention_applied_audio, hidden_gru), 2)), dim=2)   # (batch_size, 1, 1)
-            # print('attention_weights_mm_audio {}'.format(attention_weights_mm_audio.size()))
-            attention_weights_mm_img = F.softmax(self.att_mm_img(torch.cat((attention_applied_img, hidden_gru), 2)), dim=2)     # (batch_size, 1, 1)
-            # print('attention_weights_mm_audio {}'.format(attention_weights_mm_audio.size()))
-    #         attention_applied_mm = torch.bmm(attention_weights_mm, attention_applied_audio) + torch.bmm(attention_weights_mm, attention_applied_img)
-            attention_applied_mm = torch.bmm(attention_weights_mm_audio, attention_applied_audio) + torch.bmm(attention_weights_mm_img, attention_applied_img)  # (batch_size, 1, 2 * hidden_size) 
-            # print('attention_applied_mm {}'.format(attention_applied_mm.size()))
+        # For the output layer
+        self.lstm = nn.LSTM(self.input_size + 2*self.hidden_size, self.hidden_size, self.num_layers)
+        self.out = nn.Linear(self.hidden_size, self.output_size)
 
-            final_attention_weights = attention_weights_mm_audio[0]*attention_weights_audio[0] + attention_weights_mm_img[0]*attention_weights_img[0]
-            
-    #         print('final_attention_weights: {}'.format(final_attention_weights.size()))
-            
-            final_out = torch.cat((audio_aware_text_curr, image_aware_text_curr, attention_applied_mm), 2)      # (batch_size, 1, 6 * hidden_size)
-            final_out = self.att_combine(final_out)     # (batch_size, 1, 2 * hidden_size)
-            final_out = F.relu(final_out)
-            final_out, hidden_gru = self.gru(final_out, hidden_gru)     # (batch_size, 1, 2 * hidden_size)
-            final_out = masked_softmax(self.out(final_out), text_mask, log_softmax=False)       # (batch_size, 1, max_text_length)
+    def forward(self, sent_embed, decoder_hidden, text_audio_enc_out, final_text_audio_enc_hidden, text_img_enc_out, final_text_img_enc_hidden): # TODO : Add in_sent_embed (The initial start of summary embedding)
+        # For the text-audio attention
+        e1 = self.v1(self.tanh(self.W1(text_audio_enc_out) + self.W2(decoder_hidden))) # (batch, max_seq_len, 1)
+        att_weights_1 = F.softmax(e1, dim=1)        # (batch, max_seq_len, 1)
+        c1 = att_weights_1 * text_audio_enc_out     # (batch, max_seq_len, 2 * hidden_size)
+        c1 = torch.sum(c1, dim=1)                   # (batch, 2 * hidden_size)
 
-            final_out = final_out.squeeze(1)
-            out_distributions.append(final_out)
+        # For the text-image attention
+        e2 = self.v2(self.tanh(self.W3(text_img_enc_out) + self.W4(decoder_hidden)))
+        att_weights_2 = F.softmax(e2, dim=1)
+        c2 = att_weights_2 * text_img_enc_out
+        c2 = torch.sum(c2, dim=1)       # (batch, 2 * hidden_size)
 
-        return out_distributions
+        # For the multimodal attention
+        # e3 = self.v3(self.tanh(self.W5(c1) + self.W2(c2)))      # (batch, 1)
+        # c3 = e3 * c1 + e3 * c2              # (batch, 2 * hidden_size)
+        e_beta_1 = self.v_beta_1(self.tanh(self.W_beta_1(c1) + self.W_beta_2(decoder_hidden)))  # (batch, 1)
+        beta_1 = e_beta_1 * c1          # (batch, 2 * hidden_size)
 
-    def initHidden(self):
-        return torch.zeros(1, 1, self.hidden_size * 2)
+        e_beta_2 = self.v_beta_2(self.tanh(self.W_beta_3(c2) + self.W_beta_4(decoder_hidden)))  # (batch, 1)
+        beta_2 = e_beta_2 * c2          # (batch, 2 * hidden_size)
+
+        c3 = beta_1 + beta_2            # (batch, 2 * hidden_size)
+        
+        # TODO : add the LSTM and output linear layer
+
+        return c3                   
