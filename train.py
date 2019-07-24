@@ -34,8 +34,9 @@ def main(course_dir, text_embedding_size, audio_embedding_size, hidden_size, dro
     train_text_loader = torch.utils.data.DataLoader(TextDataset(course_dir, max_text_length), batch_size = 1, shuffle = False, num_workers = 2)
 
     # Get Audio embeddings
-    train_audio_loader = torch.utils.data.DataLoader(AudioDataset(course_dir), batch_size = 1, shuffle = False, num_workers = 2)
-    
+    train_audio_loader = torch.utils.data.DataLoader(AudioDataset(course_dir), batch_size = 1, shuffle = False, num_workers = 2, collate_fn=audio_collator)
+    sys.exit()          # For debugging
+
     # Preprocess the image in prescribed format
     normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     transform = transforms.Compose([transforms.RandomResizedCrop(256), transforms.RandomHorizontalFlip(), transforms.ToTensor(), normalize,])
@@ -143,7 +144,18 @@ def get_source_sentence(source_path, idx):
             source_sentences[i] = source_sentences[i].lower()
         return source_sentences[idx]
     
-    
+# NEED TO TEST
+def audio_collator(DataLoaderBatch):
+    batch_size = len(DataLoaderBatch)
+    audio_items = [item for item in DataLoaderBatch]
+    lengths = [num_frames.size(0) for num_frames in audio_items]
+    max_len = max(lengths)
+    padded_seq = torch.zeros(batch_size, max_len)
+    for idx, frame_len in enumerate(lengths):
+        padded_seq[idx][0:frame_len] = audio_items[idx]
+    return padded_seq
+
+
 if __name__ == '__main__':
     course_dir = '/home/anish17281/NLP_Dataset/dataset/'
     text_embedding_size = 300
