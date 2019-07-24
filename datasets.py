@@ -169,7 +169,7 @@ class AudioDataset(Dataset):
                 path = self.courses_dir + course_number + '/audio-features/' + audio_path
                 audio_embeddings.append(path)
 
-        return audio_embeddings, len(audio_embeddings)
+        return audio_embeddings
 
     def get_num(self, str):
         return int(re.search(r'\d+', str).group())
@@ -182,7 +182,7 @@ class AudioDataset(Dataset):
             audio_vectors = pickle.load(fp)
         audio_vectors = np.transpose(audio_vectors)
         audio_vectors = torch.from_numpy(audio_vectors)
-        return audio_vectors
+        return audio_vectors, int(audio_vectors.size(0))
 
 class TargetDataset(Dataset):
     """

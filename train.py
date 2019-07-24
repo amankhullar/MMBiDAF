@@ -61,7 +61,7 @@ def main(course_dir, text_embedding_size, audio_embedding_size, hidden_size, dro
     eps = 1e-8
 
     with torch.enable_grad(), tqdm(total=max(len(train_text_loader.dataset), len(train_image_loader.dataset), len(train_audio_loader.dataset))) as progress_bar:
-        for (batch_text, original_text_length), batch_audio, batch_images, (batch_target_indices, source_path, target_path) in zip(train_text_loader, train_audio_loader, train_image_loader, train_target_loader):
+        for (batch_text, original_text_length), (batch_audio, original_audio_len), (batch_images, original_img_len), (batch_target_indices, source_path, target_path) in zip(train_text_loader, train_audio_loader, train_image_loader, train_target_loader):
             loss = 0
             # Setup for forward
             batch_size = batch_text.size(0)
