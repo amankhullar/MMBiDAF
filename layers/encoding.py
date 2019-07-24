@@ -117,14 +117,7 @@ class ImageEmbedding(nn.Module):
         self.enc_image_size = encoded_image_size
 
         # I have used ResNet to extract the features, I could probably experiment with VGG
-        resnet = torchvision.models.resnet101(pretrained = True) #Pretrained ImageNet ResNet-101
-
-        # Remove linear and pool layers (since we are not doing classification)
-        modules = list(resnet.children())[:-2]
-        self.resnet = nn.Sequential(*modules)
-
-        # Resize image to fixed size to allow input images of variable sizes
-        self.adaptive_pool = nn.AdaptiveAvgPool2d((encoded_image_size, encoded_image_size))
+        self.resnet = torchvision.models.resnet101(pretrained = True) #Pretrained ImageNet ResNet-101
 
         self.fine_tune()
     
@@ -139,8 +132,6 @@ class ImageEmbedding(nn.Module):
             Encoded images
         """
         out = self.resnet(images)      # (batch_size, 2048, image_size/32, image_size/32)
-        out = self.adaptive_pool(out)  # (batch_size, 2048, encoded_image_size, encoded_image_size)
-        out = out.permute(0, 2, 3, 1)  # (batch_size, encoded_image_size, encoded_image_size, 2048)
         return out
 
     def fine_tune(self, fine_tune = True):

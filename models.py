@@ -85,11 +85,7 @@ class MMBiDAF(nn.Module):
         original_images_size = transformed_images.size()                                             # (batch_size, num_keyframes, num_channels, transformed_image_size, transformed_image_size)
         # Combine images across videos in a batch into a single dimension to be embedded by ResNet
         transformed_images = torch.reshape(transformed_images, (-1, transformed_images.size(2), transformed_images.size(3), transformed_images.size(4)))    # (batch_size * num_keyframes, num_channels, transformed_image_size, transformed_image_size)
-        image_emb = self.image_keyframes_emb(transformed_images)                                    # (batch_size * num_keyframes, encoded_image_size, encoded_image_size, 2048)
-        image_emb = torch.reshape(image_emb, (image_emb.size(0), -1))                               # (batch_size * num_keyframes, encoded_image_size * encoded_image_size * 2048)
-        image_linear_layer = nn.Linear(image_emb.size(-1), 300)                                     # Linear layer for linear transformation
-        image_emb = image_linear_layer(image_emb)                                                   # (batch_size * num_keyframes, 300)
-        image_emb = torch.reshape(image_emb, (original_images_size[0], original_images_size[1], -1))  # (batch_size, num_keyframes, 300)
+        image_emb = self.image_keyframes_emb(transformed_images)                                    # (batch_size * num_keyframes, encoded_image_size=1000)
         image_emb = self.emb(image_emb)                                                             # (batch_size, num_keyframes, hidden_size)
         image_encoded = self.image_enc(image_emb, original_image_lengths)                           # (batch_size, num_keyframes, 2 * hidden_size)
 
