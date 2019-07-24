@@ -60,7 +60,7 @@ class TextDataset(Dataset):
     def __getitem__(self, idx):
         self.embedding_path = self.text_embeddings_path[idx]
         self.embedding_dict = torch.load(self.embedding_path)
-        word_vectors = torch.zeros(self.max_text_length, 300)
+        word_vectors = torch.zeros(len(self.embedding_dict)+1, 300)
         for count, sentence in enumerate(self.embedding_dict):
             word_vectors[count] = self.embedding_dict[sentence]
         word_vectors[len(self.embedding_dict)] = torch.zeros(1, 300) - 1            # End of summary token embedding

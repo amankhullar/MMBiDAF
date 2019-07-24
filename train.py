@@ -31,18 +31,18 @@ from nltk.tokenize import sent_tokenize
 
 def main(course_dir, text_embedding_size, audio_embedding_size, hidden_size, drop_prob, max_text_length, out_heatmaps_dir, num_epochs=100):
     # Get sentence embeddings
-    train_text_loader = torch.utils.data.DataLoader(TextDataset(course_dir, max_text_length), batch_size = 1, shuffle = False, num_workers = 2)
+    train_text_loader = torch.utils.data.DataLoader(TextDataset(course_dir, max_text_length), batch_size = 3, shuffle = False, num_workers = 2, collate_fn=text_collator)
 
     # Get Audio embeddings
-    train_audio_loader = torch.utils.data.DataLoader(AudioDataset(course_dir), batch_size = 1, shuffle = False, num_workers = 2, collate_fn=audio_collator)
+    train_audio_loader = torch.utils.data.DataLoader(AudioDataset(course_dir), batch_size = 3, shuffle = False, num_workers = 2, collate_fn=audio_collator)
 
     # Preprocess the image in prescribed format
     normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     transform = transforms.Compose([transforms.RandomResizedCrop(256), transforms.RandomHorizontalFlip(), transforms.ToTensor(), normalize,])
-    train_image_loader = torch.utils.data.DataLoader(ImageDataset(course_dir, transform), batch_size = 1, shuffle = False, num_workers = 2, collate_fn=image_collator)
+    train_image_loader = torch.utils.data.DataLoader(ImageDataset(course_dir, transform), batch_size = 3, shuffle = False, num_workers = 2, collate_fn=image_collator)
 
     # Load Target text
-    train_target_loader = torch.utils.data.DataLoader(TargetDataset(course_dir), batch_size = 1, shuffle = False, num_workers = 2)
+    train_target_loader = torch.utils.data.DataLoader(TargetDataset(course_dir), batch_size = 3, shuffle = False, num_workers = 2)
 
     # Create model
     model = MMBiDAF(hidden_size, text_embedding_size, audio_embedding_size, drop_prob, max_text_length)
@@ -142,7 +142,17 @@ def get_source_sentence(source_path, idx):
         for i in range(len(source_sentences)):
             source_sentences[i] = source_sentences[i].lower()
         return source_sentences[idx]
-    
+
+def text_collator(DataLoaderBatch):
+    batch_size = len(DataLoaderBatch)
+    text_items = [item[0] for item in DataLoaderBatch]
+    lengths = [num_sent.size(0) for num_sent in text_items]
+    max_len = max(lengths)
+    padded_seq = torch.zeros(batch_size, max_len, 300)          # manually added the number of text features
+    for idx, trans_len in enumerate(lengths):
+        padded_seq[idx][0:trans_len] = text_items[idx]
+    return padded_seq, lengths
+
 def audio_collator(DataLoaderBatch):
     batch_size = len(DataLoaderBatch)
     audio_items = [item for item in DataLoaderBatch]
