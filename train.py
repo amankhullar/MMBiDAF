@@ -150,7 +150,7 @@ def audio_collator(DataLoaderBatch):
     audio_items = [item for item in DataLoaderBatch]
     lengths = [num_frames.size(0) for num_frames in audio_items]
     max_len = max(lengths)
-    padded_seq = torch.zeros(batch_size, max_len)
+    padded_seq = torch.zeros(batch_size, max_len, 128)          # manually added the number of audio features
     for idx, frame_len in enumerate(lengths):
         padded_seq[idx][0:frame_len] = audio_items[idx]
     return padded_seq
