@@ -22,6 +22,8 @@ class TextDataset(Dataset):
              courses_dir (string) : The directory containing the embeddings for the preprocessed sentences 
         """
         self.courses_dir = courses_dir
+        with open('dataset_inter.pkl', 'rb') as f:
+            self.dataset_inter = pickle.load(f)
         self.text_embeddings_path = self.load_sentence_embeddings_path()
         self.max_text_length = max_text_length
 
@@ -36,10 +38,18 @@ class TextDataset(Dataset):
         
         for course_number in sorted(dirlist, key=int):
             course_transcript_path = os.path.join(self.courses_dir, course_number, 'sentence_features/')
-            text_embedding_path = [self.courses_dir + course_number + '/sentence_features/' + transcript_path for transcript_path in sorted(os.listdir(course_transcript_path), key=self.get_num)]
-            transcript_embeddings.append(text_embedding_path)
+            for transcript_path in sorted(os.listdir(course_transcript_path), key=self.get_num):
+                if '_' in transcript_path:
+                    continue
+                # Dataset cleanup for consistency
+                path_check = course_number + '/' + transcript_path[:-3]
+                if path_check not in self.dataset_inter:
+                    continue
 
-        return [val for sublist in transcript_embeddings for val in sublist]    #Flatten the list of lists
+                path = self.courses_dir + course_number + '/sentence_features/' + transcript_path
+                transcript_embeddings.append(path)
+        
+        return transcript_embeddings
 
     def get_num(self, str):
         return int(re.search(r'\d+', str).group())
@@ -76,6 +86,8 @@ class ImageDataset(Dataset):
         self.courses_dir = courses_dir
         self.transform = transform
         self.num_videos = 0
+        with open('dataset_inter.pkl', 'rb') as f:
+            self.dataset_inter = pickle.load(f)
         self.image_paths = self.load_image_paths()
 
     def get_num(self, str):
@@ -92,7 +104,13 @@ class ImageDataset(Dataset):
 
         for course_dir in sorted(dirlist, key=int):
             keyframes_dir_path = os.path.join(self.courses_dir, course_dir, 'video_key_frames/')
+
             for video_dir in sorted(os.listdir(keyframes_dir_path), key=int):
+                # Dataset cleanup for consistency
+                path_check = course_dir + '/' + str(video_dir)
+                if path_check not in self.dataset_inter:
+                    continue
+                
                 self.num_videos += 1
                 video_dir_path = os.path.join(keyframes_dir_path, video_dir)
                 keyframes = [os.path.join(video_dir_path, img) for img in os.listdir(video_dir_path) \
@@ -126,6 +144,8 @@ class AudioDataset(Dataset):
         """
         self.courses_dir = courses_dir
         # self.audios_paths = sorted(os.listdir(self.courses_dir), key = self.get_num)
+        with open('dataset_inter.pkl', 'rb') as f:
+            self.dataset_inter = pickle.load(f)
         self.audios_paths = self.load_audio_path()
 
     def load_audio_path(self):
@@ -139,10 +159,17 @@ class AudioDataset(Dataset):
         
         for course_number in sorted(dirlist, key=int):
             course_audio_path = os.path.join(self.courses_dir, course_number, 'audio-features/')
-            audio_embedding_path = [self.courses_dir + course_number + '/audio-features/' + audio_path for audio_path in sorted(os.listdir(course_audio_path), key=self.get_num)]
-            audio_embeddings.append(audio_embedding_path)
+            
+            for audio_path in sorted(os.listdir(course_audio_path), key=self.get_num):
+                # Dataset cleanup for consistency
+                path_check = course_number + '/' + audio_path[:-4]
+                if path_check not in self.dataset_inter:
+                    continue
 
-        return [val for sublist in audio_embeddings for val in sublist]     #Flatten the list of lists
+                path = self.courses_dir + course_number + '/audio-features/' + audio_path
+                audio_embeddings.append(path)
+
+        return audio_embeddings
 
     def get_num(self, str):
         return int(re.search(r'\d+', str).group())
@@ -167,6 +194,8 @@ class TargetDataset(Dataset):
              courses_dir (string) : The directory containing the entire dataset.
         """
         self.courses_dir = courses_dir
+        with open('dataset_inter.pkl', 'rb') as f:
+            self.dataset_inter = pickle.load(f)
         self.target_sentences_path = self.load_target_sentences_path()
         self.source_sentences_path = self.load_source_sentences_path()
 
@@ -179,10 +208,10 @@ class TargetDataset(Dataset):
 
         for course_number in sorted(dirlist, key=int):
             target_path = os.path.join(self.courses_dir, course_number, 'ground-truth/')
-            target_sentence_path = [target_path + target_sentence for target_sentence in sorted([item for item in os.listdir(target_path) if os.path.isfile(os.path.join(target_path, item)) and '.txt' in item and '_' not in item], key=self.get_num)]
-            target_sentences.append(target_sentence_path)
+            target_sentence_path = [target_path + target_sentence for target_sentence in sorted([item for item in os.listdir(target_path) if os.path.isfile(os.path.join(target_path, item)) and '.txt' in item and '_' not in item and '{}/{}'.format(course_number, item[:-4]) in self.dataset_inter], key=self.get_num)]
+            target_sentences.extend(target_sentence_path)
 
-        return [val for sublist in target_sentences for val in sublist]    #Flatten the list of lists
+        return target_sentences
 
     def load_source_sentences_path(self):
         source_sentences = []
@@ -195,11 +224,11 @@ class TargetDataset(Dataset):
         
         for course_number in sorted(dirlist, key=int):
             source_path = os.path.join(self.courses_dir, course_number, 'transcripts/')
-            source_sentence_path = [source_path + transcript_path for transcript_path in sorted([item for item in os.listdir(source_path) if os.path.isfile(os.path.join(source_path, item)) and '.txt' in item], key=self.get_num)]
+            source_sentence_path = [source_path + transcript_path for transcript_path in sorted([item for item in os.listdir(source_path) if os.path.isfile(os.path.join(source_path, item)) and '.txt' in item and '{}/{}'.format(course_number, item[:-4]) in self.dataset_inter], key=self.get_num)]
 
-            source_sentences.append(source_sentence_path)
+            source_sentences.extend(source_sentence_path)
 
-        return [val for sublist in source_sentences for val in sublist]    #Flatten the list of lists
+        return source_sentences
 
     def get_num(self, str):
         return int(re.search(r'\d+', str).group())
