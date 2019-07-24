@@ -130,7 +130,7 @@ class ImageDataset(Dataset):
             if self.transform is not None:
                 image = self.transform(image)
             transformed_images.append(image)
-        return torch.stack(transformed_images)
+        return torch.stack(transformed_images), len(transformed_images)
 
 class AudioDataset(Dataset):
     """
@@ -169,7 +169,7 @@ class AudioDataset(Dataset):
                 path = self.courses_dir + course_number + '/audio-features/' + audio_path
                 audio_embeddings.append(path)
 
-        return audio_embeddings
+        return audio_embeddings, len(audio_embeddings)
 
     def get_num(self, str):
         return int(re.search(r'\d+', str).group())

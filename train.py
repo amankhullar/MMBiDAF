@@ -31,15 +31,15 @@ from nltk.tokenize import sent_tokenize
 
 def main(course_dir, text_embedding_size, audio_embedding_size, hidden_size, drop_prob, max_text_length, out_heatmaps_dir, num_epochs=100):
     # Get sentence embeddings
-    train_text_loader = torch.utils.data.DataLoader(TextDataset(course_dir, max_text_length), batch_size = 3, shuffle = False, num_workers = 2, collate_fn=text_collator)
+    train_text_loader = torch.utils.data.DataLoader(TextDataset(course_dir, max_text_length), batch_size = 3, shuffle = False, num_workers = 2, collate_fn=collator)
 
     # Get Audio embeddings
-    train_audio_loader = torch.utils.data.DataLoader(AudioDataset(course_dir), batch_size = 3, shuffle = False, num_workers = 2, collate_fn=audio_collator)
+    train_audio_loader = torch.utils.data.DataLoader(AudioDataset(course_dir), batch_size = 3, shuffle = False, num_workers = 2, collate_fn=collator)
 
     # Preprocess the image in prescribed format
     normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     transform = transforms.Compose([transforms.RandomResizedCrop(256), transforms.RandomHorizontalFlip(), transforms.ToTensor(), normalize,])
-    train_image_loader = torch.utils.data.DataLoader(ImageDataset(course_dir, transform), batch_size = 3, shuffle = False, num_workers = 2, collate_fn=image_collator)
+    train_image_loader = torch.utils.data.DataLoader(ImageDataset(course_dir, transform), batch_size = 3, shuffle = False, num_workers = 2, collate_fn=collator)
 
     # Load Target text
     train_target_loader = torch.utils.data.DataLoader(TargetDataset(course_dir), batch_size = 3, shuffle = False, num_workers = 2)
@@ -143,36 +143,16 @@ def get_source_sentence(source_path, idx):
             source_sentences[i] = source_sentences[i].lower()
         return source_sentences[idx]
 
-def text_collator(DataLoaderBatch):
+def collator(DataLoaderBatch):
     batch_size = len(DataLoaderBatch)
-    text_items = [item[0] for item in DataLoaderBatch]
-    lengths = [num_sent.size(0) for num_sent in text_items]
+    items = [item[0] for item in DataLoaderBatch]
+    feature_size = items[0].size(-1)
+    lengths = [num_elements.size(0) for num_elements in items]
     max_len = max(lengths)
-    padded_seq = torch.zeros(batch_size, max_len, 300)          # manually added the number of text features
-    for idx, trans_len in enumerate(lengths):
-        padded_seq[idx][0:trans_len] = text_items[idx]
+    padded_seq = torch.zeros(batch_size, max_len, feature_size)          # manually added the number of text features
+    for idx, item_len in enumerate(lengths):
+        padded_seq[idx][0:item_len] = items[idx]
     return padded_seq, lengths
-
-def audio_collator(DataLoaderBatch):
-    batch_size = len(DataLoaderBatch)
-    audio_items = [item for item in DataLoaderBatch]
-    lengths = [num_frames.size(0) for num_frames in audio_items]
-    max_len = max(lengths)
-    padded_seq = torch.zeros(batch_size, max_len, 128)          # manually added the number of audio features
-    for idx, frame_len in enumerate(lengths):
-        padded_seq[idx][0:frame_len] = audio_items[idx]
-    return padded_seq
-
-def image_collator(DataLoaderBatch):
-    batch_size = len(DataLoaderBatch)
-    image_items = [item for item in DataLoaderBatch]
-    lengths = [num_key_frames.size(0) for num_key_frames in image_items]
-    max_len = max(lengths)
-    padded_seq = torch.zeros(batch_size, max_len, 3, 1000)          # manually added the number of image features
-    for idx, frame_len in enumerate(lengths):
-        padded_seq[idx][0:frame_len] = image_items[idx]
-    return padded_seq
-
 
 if __name__ == '__main__':
     course_dir = '/home/anish17281/NLP_Dataset/dataset/'
