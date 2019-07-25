@@ -285,7 +285,7 @@ class TargetDataset(Dataset):
                 continue
         target_indices.append(torch.Tensor([len(source_sentences)]))                        # Appended the EOS token
         
-        return torch.stack(target_indices), self.source_sentences_path[idx], self.target_sentences_path[idx]
+        return torch.stack(target_indices), self.source_sentences_path[idx], self.target_sentences_path[idx], len(target_indices)
 
     def get_index(self, source_sentences, target_sentence):
         for idx, sent in enumerate(source_sentences):

@@ -42,7 +42,7 @@ def main(course_dir, text_embedding_size, audio_embedding_size, hidden_size, dro
     train_image_loader = torch.utils.data.DataLoader(ImageDataset(course_dir, transform), batch_size = 3, shuffle = False, num_workers = 2, collate_fn=img_collator)
 
     # Load Target text
-    train_target_loader = torch.utils.data.DataLoader(TargetDataset(course_dir), batch_size = 3, shuffle = False, num_workers = 2)
+    train_target_loader = torch.utils.data.DataLoader(TargetDataset(course_dir), batch_size = 3, shuffle = False, num_workers = 2, collate_fn=target_collator)
 
     # Create model
     model = MMBiDAF(hidden_size, text_embedding_size, audio_embedding_size, drop_prob, max_text_length)
@@ -61,7 +61,7 @@ def main(course_dir, text_embedding_size, audio_embedding_size, hidden_size, dro
     eps = 1e-8
 
     with torch.enable_grad(), tqdm(total=max(len(train_text_loader.dataset), len(train_image_loader.dataset), len(train_audio_loader.dataset))) as progress_bar:
-        for (batch_text, original_text_length), (batch_audio, original_audio_len), (batch_images, original_img_len), (batch_target_indices, source_path, target_path) in zip(train_text_loader, train_audio_loader, train_image_loader, train_target_loader):
+        for (batch_text, original_text_length), (batch_audio, original_audio_len), (batch_images, original_img_len), (batch_target_indices, source_path, target_path, original_target_len) in zip(train_text_loader, train_audio_loader, train_image_loader, train_target_loader):
             loss = 0
             # Setup for forward
             batch_size = batch_text.size(0)
@@ -163,6 +163,13 @@ def img_collator(DataLoaderBatch):
     for idx, item_len in enumerate(lengths):
         padded_seq[idx][0:item_len] = items[idx]
     return padded_seq, lengths
+
+def target_collator(DataLoaderBatch):
+    batch_items = [item for item in DataLoaderBatch]
+    items, source_sent_paths, target_sent_paths, _ = zip(*batch_items)
+    lengths = [len(num_target_sent) for num_target_sent in items]
+    padded_seq = torch.nn.utils.rnn.pad_sequence(items, batch_first=True, padding_value=0)
+    return padded_seq, source_sent_paths, target_sent_paths, lengths
 
 if __name__ == '__main__':
     course_dir = '/home/anish17281/NLP_Dataset/dataset/'
