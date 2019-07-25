@@ -39,7 +39,7 @@ def main(course_dir, text_embedding_size, audio_embedding_size, hidden_size, dro
     # Preprocess the image in prescribed format
     normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     transform = transforms.Compose([transforms.RandomResizedCrop(256), transforms.RandomHorizontalFlip(), transforms.ToTensor(), normalize,])
-    train_image_loader = torch.utils.data.DataLoader(ImageDataset(course_dir, transform), batch_size = 3, shuffle = False, num_workers = 2, collate_fn=collator)
+    train_image_loader = torch.utils.data.DataLoader(ImageDataset(course_dir, transform), batch_size = 3, shuffle = False, num_workers = 2, collate_fn=img_collator)
 
     # Load Target text
     train_target_loader = torch.utils.data.DataLoader(TargetDataset(course_dir), batch_size = 3, shuffle = False, num_workers = 2)
@@ -150,6 +150,16 @@ def collator(DataLoaderBatch):
     lengths = [num_elements.size(0) for num_elements in items]
     max_len = max(lengths)
     padded_seq = torch.zeros(batch_size, max_len, feature_size)          # manually added the number of text features
+    for idx, item_len in enumerate(lengths):
+        padded_seq[idx][0:item_len] = items[idx]
+    return padded_seq, lengths
+
+def img_collator(DataLoaderBatch):
+    batch_size = len(DataLoaderBatch)
+    items = [item[0] for item in DataLoaderBatch]
+    lengths = [num_key_frames.size(0) for num_key_frames in items]
+    max_len = max(lengths)
+    padded_seq = torch.zeros(batch_size, max_len, 3, 256, 256)          # manually added the number of img features
     for idx, item_len in enumerate(lengths):
         padded_seq[idx][0:item_len] = items[idx]
     return padded_seq, lengths
