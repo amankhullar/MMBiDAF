@@ -110,6 +110,7 @@ class MMBiDAF(nn.Module):
         #     hidden_gru, final_out, sentence_dist = self.multimodal_att_decoder(mod_text_audio, mod_text_image, hidden_gru, text_mask)
 
         decoder_hidden = (text_audio_hidden.sum(1) + text_img_hidden.sum(1)).unsqueeze(1)           # (batch_size, 1, hidden_size)
+        decoder_hidden = decoder_hidden.transpose(0,1)                                              # To get the decoder input hidden state in required form
         out_distributions = self.multimodal_att_decoder(torch.zeros(1, 1, 300), decoder_hidden, mod_text_audio, mod_text_image)      # (torch.zeros : Represents teh start of summary token but needs to be changed for batch size and correct embedding instead of zeros)
                                                                                                                                     # TODO : make the decoder map from hidden_size to 2* hidden size -> added 2*hidden_size for checking
         print(out_distributions.size())
