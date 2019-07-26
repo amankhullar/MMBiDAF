@@ -102,6 +102,20 @@ class MMBiDAF(nn.Module):
         audio_mask = torch.ones(1, embedded_audio.size(1))                                          # (batch_size, padded_seq_length)
         image_mask = torch.ones(1, original_images_size[1])                                         # (batch_size, padded_seq_length)
 
+        # maxlen_text = embedded_text.size(1)
+        # text_mask = torch.arange(maxlen_text)[None, :] < original_text_lengths[:, None]             # (batch_size, padded_seq_length)
+
+        # maxlen_audio = embedded_audio.size(1)
+        # audio_mask = torch.arange(maxlen_audio)[None, :] < original_audio_lengths[:, None]          # (batch_size, padded_seq_length)
+
+        # maxlen_image = transformed_images.size(1)
+        # image_mask = torch.arange(maxlen_image)[None, :] < original_image_lengths[:, None]          # (batch_size, padded_seq_length)
+
+        # print("Mask sizes")
+        # print(text_mask.size())
+        # print(audio_mask.size())
+        # print(image_mask.size())
+
         text_audio_att = self.bidaf_att_audio(text_encoded, audio_encoded, text_mask, audio_mask)   # (batch_size, num_sentences, 8 * hidden_size)
         text_image_att = self.bidaf_att_image(text_encoded, image_encoded, text_mask, image_mask)   # (batch_size, num_sentences, 8 * hidden_size)
 
