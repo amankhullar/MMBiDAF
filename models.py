@@ -81,10 +81,10 @@ class MMBiDAF(nn.Module):
 
     def forward(self, embedded_text, original_text_lengths, embedded_audio, original_audio_lengths, transformed_images, original_image_lengths, hidden_gru=None):
         text_emb = self.emb(embedded_text)                                                          # (batch_size, num_sentences, hidden_size)
-        text_encoded = self.text_enc(text_emb, original_text_lengths)                               # (batch_size, num_sentences, 2 * hidden_size)
+        text_encoded, _ = self.text_enc(text_emb, original_text_lengths)                               # (batch_size, num_sentences, 2 * hidden_size)
 
         audio_emb = self.a_emb(embedded_audio)                                                      # (batch_size, num_audio_envelopes, hidden_size)
-        audio_encoded = self.audio_enc(audio_emb, original_audio_lengths)                           # (batch_size, num_audio_envelopes, 2 * hidden_size)
+        audio_encoded, _ = self.audio_enc(audio_emb, original_audio_lengths)                           # (batch_size, num_audio_envelopes, 2 * hidden_size)
 
         original_images_size = transformed_images.size()                                             # (batch_size, num_keyframes, num_channels, transformed_image_size, transformed_image_size)
         # Combine images across videos in a batch into a single dimension to be embedded by ResNet
@@ -92,7 +92,7 @@ class MMBiDAF(nn.Module):
         image_emb = self.image_keyframes_emb(transformed_images)                                    # (batch_size * num_keyframes, encoded_image_size=1000)
         image_emb = torch.reshape(image_emb, (original_images_size[0], original_images_size[1], -1))  # (batch_size, num_keyframes, 300)
         image_emb = self.i_emb(image_emb)                                                             # (batch_size, num_keyframes, hidden_size)
-        image_encoded = self.image_enc(image_emb, original_image_lengths)                           # (batch_size, num_keyframes, 2 * hidden_size)
+        image_encoded, _ = self.image_enc(image_emb, original_image_lengths)                           # (batch_size, num_keyframes, 2 * hidden_size)
 
         # TODO: This will only work for batch_size = 1. Add support for larger batches
         ones = torch.ones(1, 1, int(original_text_lengths[0]))
@@ -119,8 +119,8 @@ class MMBiDAF(nn.Module):
         text_audio_att = self.bidaf_att_audio(text_encoded, audio_encoded, text_mask, audio_mask)   # (batch_size, num_sentences, 8 * hidden_size)
         text_image_att = self.bidaf_att_image(text_encoded, image_encoded, text_mask, image_mask)   # (batch_size, num_sentences, 8 * hidden_size)
 
-        mod_text_audio = self.mod_t_a(text_audio_att, original_text_lengths)                        # (batch_size, num_sentences, 2 * hidden_size)
-        mod_text_image = self.mod_t_i(text_image_att, original_text_lengths)                        # (batch_size, num_sentences, 2 * hidden_size)
+        mod_text_audio, (text_audio_hidden, _) = self.mod_t_a(text_audio_att, original_text_lengths)                        # (batch_size, num_sentences, 2 * hidden_size)
+        mod_text_image, (text_img_hidden, _) = self.mod_t_i(text_image_att, original_text_lengths)                        # (batch_size, num_sentences, 2 * hidden_size)
 
         # if hidden_gru is None:
         #     hidden_gru = self.multimodal_att_decoder.initHidden()
@@ -128,7 +128,9 @@ class MMBiDAF(nn.Module):
         # else:
         #     hidden_gru, final_out, sentence_dist = self.multimodal_att_decoder(mod_text_audio, mod_text_image, hidden_gru, text_mask)
 
-        out_distributions = self.multimodal_att_decoder(torch.zeros(1, 1, 300), torch.randn(1, 1, 200), mod_text_audio, mod_text_image)      # (torch.zeros : Represents teh start of summary token but needs to be changed for batch size and correct embedding instead of zeros)
+        decoder_hidden = (text_audio_hidden.sum(1) + text_img_hidden.sum(1)).unsqueeze(1)           # (batch_size, 1, hidden_size)
+        decoder_hidden = decoder_hidden.transpose(0,1)                                              # To get the decoder input hidden state in required form
+        out_distributions = self.multimodal_att_decoder(torch.zeros(1, 1, 300), decoder_hidden, mod_text_audio, mod_text_image)      # (torch.zeros : Represents teh start of summary token but needs to be changed for batch size and correct embedding instead of zeros)
                                                                                                                                     # TODO : make the decoder map from hidden_size to 2* hidden size -> added 2*hidden_size for checking
         print(out_distributions.size())
         sys.exit()              # Debugging purpose

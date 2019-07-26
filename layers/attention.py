@@ -117,21 +117,21 @@ class MultimodalAttentionDecoder(nn.Module):
 
         # For text-audio attention
         self.W1 = nn.Linear(2 * self.hidden_size, 2 * self.hidden_size)
-        self.W2 = nn.Linear(2 * self.hidden_size, 2 * self.hidden_size)
+        self.W2 = nn.Linear(self.hidden_size, 2 * self.hidden_size)
         self.v1 = nn.Linear(2 * self.hidden_size, 1)
         self.tanh = nn.Tanh()
 
         # For text-image attention
         self.W3 = nn.Linear(2 * self.hidden_size, 2 * self.hidden_size)
-        self.W4 = nn.Linear(2 * self.hidden_size, 2 * self.hidden_size)
+        self.W4 = nn.Linear(self.hidden_size, 2 * self.hidden_size)
         self.v2 = nn.Linear(2 * self.hidden_size, 1)
         # self.tanh2 = nn.Tanh()
 
         # For multimodal attention
         self.W_beta_1 = nn.Linear(2 * self.hidden_size, 2 * self.hidden_size)       # the decoder hidden size should be 2 * hidden_size at every timestep (For decoder hidden state)
-        self.W_beta_2 = nn.Linear(2 * self.hidden_size, 2 * self.hidden_size)       # Linear layer c1
+        self.W_beta_2 = nn.Linear(self.hidden_size, 2 * self.hidden_size)       # Linear layer c1
         self.W_beta_3 = nn.Linear(2 * self.hidden_size, 2 * self.hidden_size)       # the decoder hidden size should be 2 * hidden_size at every timestep (For decoder hidden state)
-        self.W_beta_4 = nn.Linear(2 * self.hidden_size, 2 * self.hidden_size)       # Linear layer c2
+        self.W_beta_4 = nn.Linear(self.hidden_size, 2 * self.hidden_size)       # Linear layer c2
         self.v_beta_1 = nn.Linear(2 * self.hidden_size, 1)
         self.v_beta_2 = nn.Linear(2 * self.hidden_size, 1)
 
@@ -165,10 +165,9 @@ class MultimodalAttentionDecoder(nn.Module):
 
         c3 = beta_1*c1 + beta_2*c2            # (batch, 2 * hidden_size)
         
-        # TODO : add the LSTM and output linear layer
         cat_input = torch.cat((c3.unsqueeze(1), sent_embed), dim=2)        # (batch, 1, 2*hidden_size + text_embedding_size)
 
-        decoder_out, _ = self.lstm(cat_input)           # (batch, 1, hidden_size)
+        decoder_out, _ = self.lstm(cat_input, (decoder_hidden, _))                       # (batch, 1, hidden_size)
         decoder_out = decoder_out.view(-1, decoder_out.size(-1))    # (batch*1, hidden_size)
 
         final_out = self.out(decoder_out)       # (batch, max_transcript_len)

@@ -93,7 +93,7 @@ class RNNEncoder(nn.Module):
         x = pack_padded_sequence(x, lengths, batch_first = True)
 
         # Apply RNN
-        x, _ = self.rnn(x) # (batch_size, seq_len, 2 * hidden_size)
+        x, (x_hidden, _) = self.rnn(x) # (batch_size, seq_len, 2 * hidden_size)
 
         # Unpack and reverse sort
         x, _ = pad_packed_sequence(x, batch_first = True, total_length = orig_len)
@@ -103,7 +103,9 @@ class RNNEncoder(nn.Module):
         # Apply dropout (RNN applies after all but the last layer)
         x = F.dropout(x, self.drop_prob, self.training)
 
-        return x
+        x_hidden = x_hidden.transpose(0,1)          # to conver the hidden state to batch first
+
+        return x, x_hidden
 
 
 class ImageEmbedding(nn.Module):
