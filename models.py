@@ -79,7 +79,7 @@ class MMBiDAF(nn.Module):
                                                                  num_layers=1)
 
 
-    def forward(self, embedded_text, original_text_lengths, embedded_audio, original_audio_lengths, transformed_images, original_image_lengths, hidden_gru=None):
+    def forward(self, embedded_text, original_text_lengths, embedded_audio, original_audio_lengths, transformed_images, original_image_lengths, batch_target_indices, original_target_len):
         text_emb = self.emb(embedded_text)                                                          # (batch_size, num_sentences, hidden_size)
         text_encoded, _ = self.text_enc(text_emb, original_text_lengths)                               # (batch_size, num_sentences, 2 * hidden_size)
 
@@ -130,8 +130,18 @@ class MMBiDAF(nn.Module):
 
         decoder_hidden = (text_audio_hidden.sum(1) + text_img_hidden.sum(1)).unsqueeze(1)           # (batch_size, 1, hidden_size)
         decoder_hidden = decoder_hidden.transpose(0,1)                                              # To get the decoder input hidden state in required form
-        out_distributions = self.multimodal_att_decoder(torch.zeros(1, 1, 300), decoder_hidden, mod_text_audio, mod_text_image)      # (torch.zeros : Represents teh start of summary token but needs to be changed for batch size and correct embedding instead of zeros)
-                                                                                                                                    # TODO : make the decoder map from hidden_size to 2* hidden size -> added 2*hidden_size for checking
+
+        decoder_input = torch.zeros(text_emb.size(0), 1, text_emb.size(-1))
+
+        # Teacher forcing
+        for idx in range(batch_target_indices.size(1)-1):
+            out_distributions, decoder_hidden = self.multimodal_att_decoder(decoder_input, decoder_hidden, mod_text_audio, mod_text_image) 
+            #TODO loss calculation
+            decoder_input = list()
+            for i, idx in enumerate(batch_target_indices):
+                decoder_input.append(embedded_text[i, idx])         # TODO :Pythonic way
+            decoder_input = torch.stack(decoder_input)
+
         print(out_distributions.size())
         sys.exit()              # Debugging purpose
 #         print(len(out_distributions))
