@@ -29,7 +29,7 @@ from ujson import load as json_load
 from nltk.tokenize import sent_tokenize
 
 
-def main(course_dir, text_embedding_size, audio_embedding_size, hidden_size, drop_prob, max_text_length, out_heatmaps_dir, num_epochs=100):
+def main(course_dir, text_embedding_size, audio_embedding_size, image_embedding_size, hidden_size, drop_prob, max_text_length, out_heatmaps_dir, num_epochs=100):
     # Get sentence embeddings
     train_text_loader = torch.utils.data.DataLoader(TextDataset(course_dir, max_text_length), batch_size = 3, shuffle = False, num_workers = 2, collate_fn=collator)
 
@@ -45,7 +45,7 @@ def main(course_dir, text_embedding_size, audio_embedding_size, hidden_size, dro
     train_target_loader = torch.utils.data.DataLoader(TargetDataset(course_dir), batch_size = 3, shuffle = False, num_workers = 2, collate_fn=target_collator)
 
     # Create model
-    model = MMBiDAF(hidden_size, text_embedding_size, audio_embedding_size, drop_prob, max_text_length)
+    model = MMBiDAF(hidden_size, text_embedding_size, audio_embedding_size, image_embedding_size, drop_prob, max_text_length)
 
     # Get optimizer and scheduler
     optimizer = optim.Adadelta(model.parameters(), 1e-4)
@@ -61,7 +61,7 @@ def main(course_dir, text_embedding_size, audio_embedding_size, hidden_size, dro
     eps = 1e-8
 
     with torch.enable_grad(), tqdm(total=max(len(train_text_loader.dataset), len(train_image_loader.dataset), len(train_audio_loader.dataset))) as progress_bar:
-        for (batch_text, original_text_length), (batch_audio, original_audio_len), (batch_images, original_img_len), (batch_target_indices, source_path, target_path, original_target_len) in zip(train_text_loader, train_audio_loader, train_image_loader, train_target_loader):
+        for (batch_text, original_text_lengths), (batch_audio, original_audio_lengths), (batch_images, original_img_lengths), (batch_target_indices, source_path, target_path, original_target_len) in zip(train_text_loader, train_audio_loader, train_image_loader, train_target_loader):
             loss = 0
             # Setup for forward
             batch_size = batch_text.size(0)
@@ -73,7 +73,7 @@ def main(course_dir, text_embedding_size, audio_embedding_size, hidden_size, dro
             batch_images = batch_images.float()
 
             # Forward
-            out_distributions = model(batch_text, original_text_length, batch_audio, torch.Tensor([batch_audio.size(1)]), batch_images, torch.Tensor([batch_images.size(1)]), hidden_state)
+            out_distributions = model(batch_text, original_text_lengths, batch_audio, original_audio_lengths, batch_images, original_img_lengths, hidden_state)
             
             for batch, target_indices in enumerate(batch_target_indices):
                 for timestep, target_idx in enumerate(target_indices.squeeze(1)):
@@ -160,9 +160,10 @@ if __name__ == '__main__':
     course_dir = '/home/anish17281/NLP_Dataset/dataset/'
     text_embedding_size = 300
     audio_embedding_size = 128
+    image_embedding_size = 1000
     hidden_size = 100
     drop_prob = 0.2
     max_text_length = 405
     num_epochs = 100
     out_heatmaps_dir = '/home/amankhullar/model/output_heatmaps/'
-    main(course_dir, text_embedding_size, audio_embedding_size, hidden_size, drop_prob, max_text_length, out_heatmaps_dir, num_epochs)
+    main(course_dir, text_embedding_size, audio_embedding_size, image_embedding_size, hidden_size, drop_prob, max_text_length, out_heatmaps_dir, num_epochs)

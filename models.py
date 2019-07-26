@@ -26,13 +26,17 @@ class MMBiDAF(nn.Module):
         drop_prob (float) : Dropout probability.
     """
 
-    def __init__(self, hidden_size, text_embedding_size, audio_embedding_size, drop_prob=0., max_transcript_length=405):
+    def __init__(self, hidden_size, text_embedding_size, audio_embedding_size, image_embedding_size, drop_prob=0., max_transcript_length=405):
         super(MMBiDAF, self).__init__()
         self.emb = Embedding(embedding_size=text_embedding_size,
                              hidden_size=hidden_size,
                              drop_prob=drop_prob)
         
         self.a_emb = Embedding(embedding_size=audio_embedding_size,     # Since audio embedding size is not 300, we need another highway encoder layer
+                               hidden_size=hidden_size,                 # and we cannot increase the hidden size beyond 100
+                               drop_prob=drop_prob)
+
+        self.i_emb = Embedding(embedding_size=image_embedding_size,     # Since image embedding size is not 300, we need another highway encoder layer
                                hidden_size=hidden_size,                 # and we cannot increase the hidden size beyond 100
                                drop_prob=drop_prob)
 
@@ -51,7 +55,7 @@ class MMBiDAF(nn.Module):
                                     num_layers=1,
                                     drop_prob=drop_prob)
 
-        self.image_keyframes_emb = ImageEmbedding(encoded_image_size=2)
+        self.image_keyframes_emb = ImageEmbedding()
 
         self.bidaf_att_audio = BiDAFAttention(2*hidden_size, 
                                               drop_prob=drop_prob)
@@ -86,7 +90,8 @@ class MMBiDAF(nn.Module):
         # Combine images across videos in a batch into a single dimension to be embedded by ResNet
         transformed_images = torch.reshape(transformed_images, (-1, transformed_images.size(2), transformed_images.size(3), transformed_images.size(4)))    # (batch_size * num_keyframes, num_channels, transformed_image_size, transformed_image_size)
         image_emb = self.image_keyframes_emb(transformed_images)                                    # (batch_size * num_keyframes, encoded_image_size=1000)
-        image_emb = self.emb(image_emb)                                                             # (batch_size, num_keyframes, hidden_size)
+        image_emb = torch.reshape(image_emb, (original_images_size[0], original_images_size[1], -1))  # (batch_size, num_keyframes, 300)
+        image_emb = self.i_emb(image_emb)                                                             # (batch_size, num_keyframes, hidden_size)
         image_encoded = self.image_enc(image_emb, original_image_lengths)                           # (batch_size, num_keyframes, 2 * hidden_size)
 
         # TODO: This will only work for batch_size = 1. Add support for larger batches

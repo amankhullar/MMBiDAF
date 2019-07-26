@@ -81,6 +81,9 @@ class RNNEncoder(nn.Module):
                            dropout = drop_prob if num_layers > 1 else 0.)
 
     def forward(self, x, lengths):
+        # Convert python list of lengths to a Tensor
+        lengths = torch.Tensor(lengths)
+
         # Save the original padded length for use by pad_packed_sequence
         orig_len = x.size(1)
 
@@ -112,9 +115,8 @@ class ImageEmbedding(nn.Module):
 
     This is from the paper Show, Attend and Tell.
     """
-    def __init__(self, encoded_image_size = 14):
+    def __init__(self):
         super(ImageEmbedding, self).__init__()
-        self.enc_image_size = encoded_image_size
 
         # I have used ResNet to extract the features, I could probably experiment with VGG
         self.resnet = torchvision.models.resnet101(pretrained = True) #Pretrained ImageNet ResNet-101
@@ -131,7 +133,7 @@ class ImageEmbedding(nn.Module):
         Return:
             Encoded images
         """
-        out = self.resnet(images)      # (batch_size, 2048, image_size/32, image_size/32)
+        out = self.resnet(images)      # (batch_size, 1000)
         return out
 
     def fine_tune(self, fine_tune = True):
