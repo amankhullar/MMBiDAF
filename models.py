@@ -79,6 +79,14 @@ class MMBiDAF(nn.Module):
                                                                  num_layers=1)
 
 
+    def get_mask(self, X, X_len):
+        X_len = torch.LongTensor(X_len)
+        maxlen = X.size(1)
+        idx = torch.arange(maxlen).unsqueeze(0).expand(torch.Size(list(X.size())[:2]))
+        len_expanded = X_len.unsqueeze(1).expand(torch.Size(list(X.size())[:2]))
+        mask = idx < len_expanded
+        return mask
+
     def forward(self, embedded_text, original_text_lengths, embedded_audio, original_audio_lengths, transformed_images, original_image_lengths, hidden_gru=None):
         text_emb = self.emb(embedded_text)                                                          # (batch_size, num_sentences, hidden_size)
         text_encoded, _ = self.text_enc(text_emb, original_text_lengths)                               # (batch_size, num_sentences, 2 * hidden_size)
@@ -94,27 +102,9 @@ class MMBiDAF(nn.Module):
         image_emb = self.i_emb(image_emb)                                                             # (batch_size, num_keyframes, hidden_size)
         image_encoded, _ = self.image_enc(image_emb, original_image_lengths)                           # (batch_size, num_keyframes, 2 * hidden_size)
 
-        # TODO: This will only work for batch_size = 1. Add support for larger batches
-        ones = torch.ones(1, 1, int(original_text_lengths[0]))
-        zeros = torch.zeros(1, 1, embedded_text.size(1) - int(original_text_lengths[0]))
-        text_mask = torch.cat((ones, zeros), 2)                                           # (batch_size, padded_seq_length)
-        
-        audio_mask = torch.ones(1, embedded_audio.size(1))                                          # (batch_size, padded_seq_length)
-        image_mask = torch.ones(1, original_images_size[1])                                         # (batch_size, padded_seq_length)
-
-        # maxlen_text = embedded_text.size(1)
-        # text_mask = torch.arange(maxlen_text)[None, :] < original_text_lengths[:, None]             # (batch_size, padded_seq_length)
-
-        # maxlen_audio = embedded_audio.size(1)
-        # audio_mask = torch.arange(maxlen_audio)[None, :] < original_audio_lengths[:, None]          # (batch_size, padded_seq_length)
-
-        # maxlen_image = transformed_images.size(1)
-        # image_mask = torch.arange(maxlen_image)[None, :] < original_image_lengths[:, None]          # (batch_size, padded_seq_length)
-
-        # print("Mask sizes")
-        # print(text_mask.size())
-        # print(audio_mask.size())
-        # print(image_mask.size())
+        text_mask = self.get_mask(embedded_text, original_text_lengths)
+        audio_mask = self.get_mask(embedded_audio, original_audio_lengths)
+        image_mask = self.get_mask(image_emb, original_image_lengths)
 
         text_audio_att = self.bidaf_att_audio(text_encoded, audio_encoded, text_mask, audio_mask)   # (batch_size, num_sentences, 8 * hidden_size)
         text_image_att = self.bidaf_att_image(text_encoded, image_encoded, text_mask, image_mask)   # (batch_size, num_sentences, 8 * hidden_size)
