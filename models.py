@@ -119,7 +119,7 @@ class MMBiDAF(nn.Module):
         #     hidden_gru, final_out, sentence_dist = self.multimodal_att_decoder(mod_text_audio, mod_text_image, hidden_gru, text_mask)
 
         decoder_hidden = (text_audio_hidden.sum(1) + text_img_hidden.sum(1)).unsqueeze(1)           # (batch_size, num_layers*num_dir, hidden_size)
-        decoder_hidden = decoder_hidden.transpose(0,1)                                              # To get the decoder input hidden state in required form
+        # decoder_hidden = decoder_hidden.transpose(0,1)                                              # To get the decoder input hidden state in required form
         decoder_cell_state = torch.zeros(1, text_emb.size(0), decoder_hidden.size(-1))              # (num_layer*num_dir, batch, hidden_size)
 
         decoder_input = torch.zeros(text_emb.size(0), 1, embedded_text.size(-1))                    # (batch, num_dir*num_layers, embedding_size)
