@@ -73,7 +73,7 @@ def main(course_dir, text_embedding_size, audio_embedding_size, image_embedding_
             batch_images = batch_images.float()
 
             # Forward
-            out_distributions = model(batch_text, original_text_lengths, batch_audio, original_audio_lengths, batch_images, original_img_lengths, hidden_state)
+            out_distributions = model(batch_text, original_text_lengths, batch_audio, original_audio_lengths, batch_images, original_img_lengths, batch_target_indices, original_target_len)
             
             for batch, target_indices in enumerate(batch_target_indices):
                 for timestep, target_idx in enumerate(target_indices.squeeze(1)):

@@ -87,7 +87,7 @@ class MMBiDAF(nn.Module):
         mask = idx < len_expanded
         return mask
 
-    def forward(self, embedded_text, original_text_lengths, embedded_audio, original_audio_lengths, transformed_images, original_image_lengths, hidden_gru=None):
+    def forward(self, embedded_text, original_text_lengths, embedded_audio, original_audio_lengths, transformed_images, original_image_lengths, batch_target_indices, original_target_len):
         text_emb = self.emb(embedded_text)                                                          # (batch_size, num_sentences, hidden_size)
         text_encoded, _ = self.text_enc(text_emb, original_text_lengths)                               # (batch_size, num_sentences, 2 * hidden_size)
 
@@ -109,8 +109,8 @@ class MMBiDAF(nn.Module):
         text_audio_att = self.bidaf_att_audio(text_encoded, audio_encoded, text_mask, audio_mask)   # (batch_size, num_sentences, 8 * hidden_size)
         text_image_att = self.bidaf_att_image(text_encoded, image_encoded, text_mask, image_mask)   # (batch_size, num_sentences, 8 * hidden_size)
 
-        mod_text_audio, (text_audio_hidden, _) = self.mod_t_a(text_audio_att, original_text_lengths)                        # (batch_size, num_sentences, 2 * hidden_size)
-        mod_text_image, (text_img_hidden, _) = self.mod_t_i(text_image_att, original_text_lengths)                        # (batch_size, num_sentences, 2 * hidden_size)
+        mod_text_audio, text_audio_hidden = self.mod_t_a(text_audio_att, original_text_lengths)                        # (batch_size, num_sentences, 2 * hidden_size
+        mod_text_image, text_img_hidden = self.mod_t_i(text_image_att, original_text_lengths)                        # (batch_size, num_sentences, 2 * hidden_size)
 
         # if hidden_gru is None:
         #     hidden_gru = self.multimodal_att_decoder.initHidden()
@@ -118,10 +118,21 @@ class MMBiDAF(nn.Module):
         # else:
         #     hidden_gru, final_out, sentence_dist = self.multimodal_att_decoder(mod_text_audio, mod_text_image, hidden_gru, text_mask)
 
-        decoder_hidden = (text_audio_hidden.sum(1) + text_img_hidden.sum(1)).unsqueeze(1)           # (batch_size, 1, hidden_size)
+        decoder_hidden = (text_audio_hidden.sum(1) + text_img_hidden.sum(1)).unsqueeze(1)           # (batch_size, num_layers*num_dir, hidden_size)
         decoder_hidden = decoder_hidden.transpose(0,1)                                              # To get the decoder input hidden state in required form
-        out_distributions = self.multimodal_att_decoder(torch.zeros(1, 1, 300), decoder_hidden, mod_text_audio, mod_text_image)      # (torch.zeros : Represents teh start of summary token but needs to be changed for batch size and correct embedding instead of zeros)
-                                                                                                                                    # TODO : make the decoder map from hidden_size to 2* hidden size -> added 2*hidden_size for checking
+        decoder_cell_state = torch.zeros(1, text_emb.size(0), decoder_hidden.size(-1))              # (num_layer*num_dir, batch, hidden_size)
+
+        decoder_input = torch.zeros(text_emb.size(0), 1, embedded_text.size(-1))                    # (batch, num_dir*num_layers, embedding_size)
+
+        # Teacher forcing
+        for idx in range(batch_target_indices.size(1)-1):
+            out_distributions, decoder_hidden, decoder_cell_state = self.multimodal_att_decoder(decoder_input, decoder_hidden, decoder_cell_state, mod_text_audio, mod_text_image) 
+            #TODO loss calculation
+            decoder_input = list()
+            for i in range(text_emb.size(0)):
+                decoder_input.append(embedded_text[i, int(idx)].unsqueeze(0))         # TODO :Pythonic way
+            decoder_input = torch.stack(decoder_input)
+
         print(out_distributions.size())
         sys.exit()              # Debugging purpose
 #         print(len(out_distributions))
