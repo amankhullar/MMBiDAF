@@ -125,12 +125,20 @@ class MMBiDAF(nn.Module):
         decoder_input = torch.zeros(text_emb.size(0), 1, embedded_text.size(-1))                    # (batch, num_dir*num_layers, embedding_size)
 
         # Teacher forcing
-        for idx in range(batch_target_indices.size(1)-1):
+        eps = 1e-8
+        loss = 0
+        for idx in range(batch_target_indices.size(1)):
             out_distributions, decoder_hidden, decoder_cell_state = self.multimodal_att_decoder(decoder_input, decoder_hidden, decoder_cell_state, mod_text_audio, mod_text_image) 
-            #TODO loss calculation
+
             decoder_input = list()
-            for i in range(text_emb.size(0)):
-                decoder_input.append(embedded_text[i, int(idx)].unsqueeze(0))         # TODO :Pythonic way
+            for batch_idx in range(batch_target_indices.size(0)):
+                # Loss calculation
+                prob = out_distributions[batch_idx, int(batch_target_indices[batch_idx, idx])]
+                print("Prob = {}".format(prob))
+                loss += -1 * torch.log(prob + eps)
+                print("Loss = {}".format(loss))
+
+                decoder_input.append(embedded_text[batch_idx, int(batch_target_indices[batch_idx, idx])].unsqueeze(0))         # TODO :Pythonic way
             decoder_input = torch.stack(decoder_input)
 
         print(out_distributions.size())
@@ -138,4 +146,4 @@ class MMBiDAF(nn.Module):
 #         print(len(out_distributions))
 #         print(out_distributions[0].size())
 
-        return out_distributions
+        return out_distributions, loss
