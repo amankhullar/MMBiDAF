@@ -29,20 +29,20 @@ from ujson import load as json_load
 from nltk.tokenize import sent_tokenize
 
 
-def main(course_dir, text_embedding_size, audio_embedding_size, image_embedding_size, hidden_size, drop_prob, max_text_length, out_heatmaps_dir, num_epochs=100):
+def main(course_dir, text_embedding_size, audio_embedding_size, image_embedding_size, hidden_size, drop_prob, max_text_length, out_heatmaps_dir, batch_size=3, num_epochs=100):
     # Get sentence embeddings
-    train_text_loader = torch.utils.data.DataLoader(TextDataset(course_dir, max_text_length), batch_size = 3, shuffle = False, num_workers = 2, collate_fn=collator)
+    train_text_loader = torch.utils.data.DataLoader(TextDataset(course_dir, max_text_length), batch_size = batch_size, shuffle = False, num_workers = 2, collate_fn=collator)
 
     # Get Audio embeddings
-    train_audio_loader = torch.utils.data.DataLoader(AudioDataset(course_dir), batch_size = 3, shuffle = False, num_workers = 2, collate_fn=collator)
+    train_audio_loader = torch.utils.data.DataLoader(AudioDataset(course_dir), batch_size = batch_size, shuffle = False, num_workers = 2, collate_fn=collator)
 
     # Preprocess the image in prescribed format
     normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     transform = transforms.Compose([transforms.RandomResizedCrop(256), transforms.RandomHorizontalFlip(), transforms.ToTensor(), normalize,])
-    train_image_loader = torch.utils.data.DataLoader(ImageDataset(course_dir, transform), batch_size = 3, shuffle = False, num_workers = 2, collate_fn=collator)
+    train_image_loader = torch.utils.data.DataLoader(ImageDataset(course_dir, transform), batch_size = batch_size, shuffle = False, num_workers = 2, collate_fn=collator)
 
     # Load Target text
-    train_target_loader = torch.utils.data.DataLoader(TargetDataset(course_dir), batch_size = 3, shuffle = False, num_workers = 2, collate_fn=target_collator)
+    train_target_loader = torch.utils.data.DataLoader(TargetDataset(course_dir), batch_size = batch_size, shuffle = False, num_workers = 2, collate_fn=target_collator)
 
     # Create model
     model = MMBiDAF(hidden_size, text_embedding_size, audio_embedding_size, image_embedding_size, drop_prob, max_text_length)
@@ -165,5 +165,6 @@ if __name__ == '__main__':
     drop_prob = 0.2
     max_text_length = 405
     num_epochs = 100
+    batch_size = 3
     out_heatmaps_dir = '/home/amankhullar/model/output_heatmaps/'
-    main(course_dir, text_embedding_size, audio_embedding_size, image_embedding_size, hidden_size, drop_prob, max_text_length, out_heatmaps_dir, num_epochs)
+    main(course_dir, text_embedding_size, audio_embedding_size, image_embedding_size, hidden_size, drop_prob, max_text_length, out_heatmaps_dir, batch_size, num_epochs)
