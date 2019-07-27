@@ -138,6 +138,7 @@ class MultimodalAttentionDecoder(nn.Module):
         # For the output layer
         self.lstm = nn.LSTM(self.text_embedding_size + 2*self.hidden_size, self.hidden_size, self.num_layers, batch_first=True)
         self.out = nn.Linear(self.hidden_size, self.output_size)
+        self.softmax = nn.Softmax()
 
     def forward(self, sent_embed, decoder_hidden, decoder_cell_state, text_audio_enc_out, text_img_enc_out): #final_text_audio_enc_hidden, , final_text_img_enc_hidden): # TODO : sent_embed : (batch, 1, text_embedding_size); decoder_hidden (batch, num_dir * num_layers, hidden_size)
         # For the text-audio attention
@@ -170,6 +171,6 @@ class MultimodalAttentionDecoder(nn.Module):
         decoder_out, (decoder_hidden, decoder_cell_state) = self.lstm(cat_input, (decoder_hidden.transpose(0,1), decoder_cell_state))                       # (batch, 1, hidden_size)
         decoder_out = decoder_out.view(-1, decoder_out.size(-1))    # (batch*1, hidden_size)
 
-        final_out = self.out(decoder_out)       # (batch, max_transcript_len)
+        final_out = self.softmax(self.out(decoder_out))       # (batch, max_transcript_len)
 
         return final_out, decoder_hidden.transpose(0,1), decoder_cell_state
