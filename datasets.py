@@ -24,7 +24,7 @@ class TextDataset(Dataset):
         self.courses_dir = courses_dir
         with open('dataset_inter.pkl', 'rb') as f:
             self.dataset_inter = pickle.load(f)
-        self.text_embeddings_path = self.load_sentence_embeddings_path()
+        self.text_embedding_paths = self.load_sentence_embeddings_path()
         self.max_text_length = max_text_length
 
     def load_sentence_embeddings_path(self):
@@ -55,10 +55,10 @@ class TextDataset(Dataset):
         return int(re.search(r'\d+', str).group())
 
     def __len__(self):
-        return len(self.text_embeddings_path)
+        return len(self.text_embedding_paths)
     
     def __getitem__(self, idx):
-        self.embedding_path = self.text_embeddings_path[idx]
+        self.embedding_path = self.text_embedding_paths[idx]
         self.embedding_dict = torch.load(self.embedding_path)
         word_vectors = torch.zeros(len(self.embedding_dict)+1, 300)
         for count, sentence in enumerate(self.embedding_dict):
@@ -166,7 +166,7 @@ class AudioDataset(Dataset):
                 if path_check not in self.dataset_inter:
                     continue
 
-                path = self.courses_dir + course_number + '/audio-features/' + audio_path
+                path = self.courses_dir + course_number + '/audio-features8/' + audio_path
                 audio_embeddings.append(path)
 
         return audio_embeddings
@@ -214,21 +214,8 @@ class TargetDataset(Dataset):
         return target_sentences
 
     def load_source_sentences_path(self):
-        source_sentences = []
-
-        # Get sorted list of all courses (excluding any files)
-        dirlist = []
-        for fname in os.listdir(self.courses_dir):
-            if os.path.isdir(os.path.join(self.courses_dir, fname)):
-                dirlist.append(fname)
-        
-        for course_number in sorted(dirlist, key=int):
-            source_path = os.path.join(self.courses_dir, course_number, 'transcripts/')
-            source_sentence_path = [source_path + transcript_path for transcript_path in sorted([item for item in os.listdir(source_path) if os.path.isfile(os.path.join(source_path, item)) and '.txt' in item and '{}/{}'.format(course_number, item[:-4]) in self.dataset_inter], key=self.get_num)]
-
-            source_sentences.extend(source_sentence_path)
-
-        return source_sentences
+        text_dataset = TextDataset(self.courses_dir)
+        return text_dataset.text_embedding_paths
 
     def get_num(self, str):
         return int(re.search(r'\d+', str).group())
@@ -239,18 +226,11 @@ class TargetDataset(Dataset):
     def __getitem__(self, idx):
         lines = []
         try:
-            with open(self.source_sentences_path[idx]) as f:
-                for line in f:
-                    if re.match(r'\d+:\d+', line) is None:
-                        line = line.replace('[MUSIC]', '')
-                        lines.append(line.strip())
+            emb = torch.load(self.source_sentences_path[idx])
         except Exception as e:
             logging.error('Unable to open file. Exception: ' + str(e))
         else:
-            source_text = ' '.join(lines)
-        
-        source_text = source_text.lower()
-        source_sentences = sent_tokenize(source_text)
+            source_sentences = emb.keys()
 
         lines = []
         try:
