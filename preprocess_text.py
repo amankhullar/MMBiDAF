@@ -21,11 +21,11 @@ def get_model(glove_path):
     return model
 
 def preprocess(text, stop_words):
-    text = text.lower()
     sentences = sent_tokenize(text)
     tweet_tokenizer = TweetTokenizer()
     document = []
     for sentence in sentences:
+        sentence = sentence.lower()
         words = tweet_tokenizer.tokenize(sentence)
         doc = [word for word in words if word not in stop_words]
         document.append(doc)
