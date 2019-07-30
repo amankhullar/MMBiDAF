@@ -2,7 +2,7 @@ import re
 from gensim.scripts.glove2word2vec import glove2word2vec
 from gensim.models import KeyedVectors
 from nltk import download
-from nltk.corpus import stopwords
+from nltk.corpus import stopwords, words
 from nltk.tokenize import sent_tokenize, word_tokenize, TweetTokenizer
 import numpy as np
 import os
@@ -36,7 +36,14 @@ def document_vector(glove_model, doc):
     doc = [word for word in doc if word in glove_model.vocab]
     return np.mean(glove_model[doc], axis = 0)
 
-def generate_embeddings(path, glove_path, sentence_path):
+def is_blank_sentence(sentence, words_set):
+    for token in sentence:
+        if token in words_set:
+            return False
+    print("Found blank sentence!")
+    return True
+
+def generate_embeddings(path, glove_path, sentence_path, words_set):
     num_files = len([item for item in os.listdir(path) if os.path.isfile(os.path.join(path, item)) and '.txt' in item])
     for idx in range(1, num_files):
         lines = []
@@ -57,6 +64,8 @@ def generate_embeddings(path, glove_path, sentence_path):
             
             embedding_matrix = {}
             for sentence in doc:
+                if is_blank_sentence(sentence, words_set):
+                    continue
                 single_sentence_embed = document_vector(model, sentence)
     #             x.append(single_sentence_embed)
                 sentence_embeddings = np.array(single_sentence_embed)
@@ -76,15 +85,16 @@ def download_data():
     download('punkt') #tokenizer, run once
     download('stopwords') #stopwords dictionary, run once
 
-def main(base_path, glove_path):
+def main(base_path, glove_path, words_set):
     num_courses = 25
     for idx in range(1, num_courses):
         transcript_path = base_path + str(idx) + "/" + "transcripts/"
-        sentence_path = base_path + str(idx) + '/' + 'sentence_features/'
+        sentence_path = base_path + str(idx) + '/' + 'sentence_features2/'
         os.system('mkdir ' + sentence_path)
-        generate_embeddings(transcript_path, glove_path, sentence_path)
+        generate_embeddings(transcript_path, glove_path, sentence_path, words_set)
 
 if __name__ == "__main__":
     base_path = '/home/anish17281/NLP_Dataset/dataset/'
     glove_path = '/home/amankhullar/glove_data/glove.6B.300d.txt'
-    main(base_path, glove_path)
+    words_set = set(words.words())
+    main(base_path, glove_path, words_set)
