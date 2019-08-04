@@ -168,7 +168,7 @@ class MultimodalAttentionDecoder(nn.Module):
 
         c3 = beta_1*c1 + beta_2*c2            # (batch, 2 * hidden_size)
         att_cov_dist = e_beta_1*att_weights_1 + e_beta_2*att_weights_2          # (batch, max_seq_len, 1)
-        coverage_vec += att_cov_dist          # (batch, max_seq_len, 1)
+        coverage_vec = coverage_vec + att_cov_dist          # (batch, max_seq_len, 1)
         
         cat_input = torch.cat((c3.unsqueeze(1), sent_embed), dim=2)        # (batch, 1, 2*hidden_size + text_embedding_size)
 
