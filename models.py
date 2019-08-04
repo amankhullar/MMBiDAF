@@ -124,11 +124,13 @@ class MMBiDAF(nn.Module):
 
         decoder_input = torch.zeros(text_emb.size(0), 1, embedded_text.size(-1))                    # (batch, num_dir*num_layers, embedding_size)
 
+        coverage_vec = torch.zeros(text_emb.size(0), text_emb.size(1), 1)                           # (batch_size, max_seq_len, 1)
+
         # Teacher forcing
         eps = 1e-8
         loss = 0
         for idx in range(batch_target_indices.size(1)):
-            out_distributions, decoder_hidden, decoder_cell_state = self.multimodal_att_decoder(decoder_input, decoder_hidden, decoder_cell_state, mod_text_audio, mod_text_image) 
+            out_distributions, decoder_hidden, decoder_cell_state, coverage_vec = self.multimodal_att_decoder(decoder_input, decoder_hidden, decoder_cell_state, mod_text_audio, mod_text_image, coverage_vec) 
 
             decoder_input = list()
             for batch_idx in range(batch_target_indices.size(0)):

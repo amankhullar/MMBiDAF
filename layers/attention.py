@@ -118,20 +118,24 @@ class MultimodalAttentionDecoder(nn.Module):
         # For text-audio attention
         self.W1 = nn.Linear(2 * self.hidden_size, 2 * self.hidden_size)
         self.W2 = nn.Linear(self.hidden_size, 2 * self.hidden_size)
+        self.Wc1 = nn.Linear(1, 2 * self.hidden_size)
         self.v1 = nn.Linear(2 * self.hidden_size, 1)
         self.tanh = nn.Tanh()
 
         # For text-image attention
         self.W3 = nn.Linear(2 * self.hidden_size, 2 * self.hidden_size)
         self.W4 = nn.Linear(self.hidden_size, 2 * self.hidden_size)
+        self.Wc2 = nn.Linear(1, 2 * self.hidden_size)
         self.v2 = nn.Linear(2 * self.hidden_size, 1)
         # self.tanh2 = nn.Tanh()
 
         # For multimodal attention
         self.W_beta_1 = nn.Linear(2 * self.hidden_size, 2 * self.hidden_size)       # the decoder hidden size should be 2 * hidden_size at every timestep (For decoder hidden state)
         self.W_beta_2 = nn.Linear(self.hidden_size, 2 * self.hidden_size)       # Linear layer c1
+        self.W_beta_c1 = nn.Linear(1, 2 * self.hidden_size)                     # Linear layer for coverage
         self.W_beta_3 = nn.Linear(2 * self.hidden_size, 2 * self.hidden_size)       # the decoder hidden size should be 2 * hidden_size at every timestep (For decoder hidden state)
         self.W_beta_4 = nn.Linear(self.hidden_size, 2 * self.hidden_size)       # Linear layer c2
+        self.W_beta_c2 = nn.Linear(1, 2 * self.hidden_size)                     # Linear layer for coverage
         self.v_beta_1 = nn.Linear(2 * self.hidden_size, 1)
         self.v_beta_2 = nn.Linear(2 * self.hidden_size, 1)
 
@@ -140,15 +144,15 @@ class MultimodalAttentionDecoder(nn.Module):
         self.out = nn.Linear(self.hidden_size, self.output_size)
         self.softmax = nn.Softmax()
 
-    def forward(self, sent_embed, decoder_hidden, decoder_cell_state, text_audio_enc_out, text_img_enc_out): # sent_embed : (batch, 1, text_embedding_size); decoder_hidden (batch, num_dir * num_layers, hidden_size)
+    def forward(self, sent_embed, decoder_hidden, decoder_cell_state, text_audio_enc_out, text_img_enc_out, coverage_vec): # sent_embed : (batch, 1, text_embedding_size); decoder_hidden (batch, num_dir * num_layers, hidden_size)
         # For the text-audio attention
-        e1 = self.v1(self.tanh(self.W1(text_audio_enc_out) + self.W2(decoder_hidden))) # (batch, max_seq_len, 1)
+        e1 = self.v1(self.tanh(self.W1(text_audio_enc_out) + self.W2(decoder_hidden) + self.Wc1(coverage_vec))) # (batch, max_seq_len, 1)
         att_weights_1 = F.softmax(e1, dim=1)        # (batch, max_seq_len, 1)
         c1 = att_weights_1 * text_audio_enc_out     # (batch, max_seq_len, 2 * hidden_size)
         c1 = torch.sum(c1, dim=1)                   # (batch, 2 * hidden_size)
 
         # For the text-image attention
-        e2 = self.v2(self.tanh(self.W3(text_img_enc_out) + self.W4(decoder_hidden)))
+        e2 = self.v2(self.tanh(self.W3(text_img_enc_out) + self.W4(decoder_hidden) + self.Wc2(coverage_vec)))
         att_weights_2 = F.softmax(e2, dim=1)
         c2 = att_weights_2 * text_img_enc_out
         c2 = torch.sum(c2, dim=1)       # (batch, 2 * hidden_size)
@@ -156,15 +160,16 @@ class MultimodalAttentionDecoder(nn.Module):
         # For the multimodal attention
         # e3 = self.v3(self.tanh(self.W5(c1) + self.W2(c2)))      # (batch, 1)
         # c3 = e3 * c1 + e3 * c2              # (batch, 2 * hidden_size)
-        e_beta_1 = self.v_beta_1(self.tanh(self.W_beta_1(c1.unsqueeze(1)) + self.W_beta_2(decoder_hidden)))  # (batch, num_dir*num_layers, 1)
-        beta_1 = e_beta_1 * c1          # (batch, num_dir*num_layers, 2 * hidden_size)
+        e_beta_1 = self.v_beta_1(self.tanh(self.W_beta_1(c1.unsqueeze(1)) + self.W_beta_2(decoder_hidden) + self.W_beta_c1(coverage_vec)))  # (batch, max_seq_len, 1)
+        beta_1 = e_beta_1 * c1          # (batch, max_seq_len, 2 * hidden_size)
         beta_1 = torch.sum(beta_1, dim=1)       # (batch, 2 * hidden_size)
 
-        e_beta_2 = self.v_beta_2(self.tanh(self.W_beta_3(c2.unsqueeze(1)) + self.W_beta_4(decoder_hidden)))  # (batch, num_dir*num_layers, 1)
-        beta_2 = e_beta_2 * c2          # (batch, num_layers*num_dir, 2 * hidden_size)
+        e_beta_2 = self.v_beta_2(self.tanh(self.W_beta_3(c2.unsqueeze(1)) + self.W_beta_4(decoder_hidden) + self.W_beta_c2(coverage_vec)))  # (batch, max_seq_len, 1)
+        beta_2 = e_beta_2 * c2          # (batch, max_seq_len, 2 * hidden_size)
         beta_2 = torch.sum(beta_2, dim=1)   # (batch, 2 * hidden_size)
 
         c3 = beta_1*c1 + beta_2*c2            # (batch, 2 * hidden_size)
+        coverage_vec += e_beta_1*att_weights_1 + e_beta_2*att_weights_2          # (batch, max_seq_len, 1)
         
         cat_input = torch.cat((c3.unsqueeze(1), sent_embed), dim=2)        # (batch, 1, 2*hidden_size + text_embedding_size)
 
@@ -173,4 +178,4 @@ class MultimodalAttentionDecoder(nn.Module):
 
         final_out = self.softmax(self.out(decoder_out))       # (batch, max_transcript_len) # TODO use masked softmax
 
-        return final_out, decoder_hidden.transpose(0,1), decoder_cell_state
+        return final_out, decoder_hidden.transpose(0,1), decoder_cell_state, coverage_vec
