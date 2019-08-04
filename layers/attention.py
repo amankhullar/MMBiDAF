@@ -167,7 +167,8 @@ class MultimodalAttentionDecoder(nn.Module):
         beta_2 = torch.sum(beta_2, dim=1)   # (batch, 2 * hidden_size)
 
         c3 = beta_1*c1 + beta_2*c2            # (batch, 2 * hidden_size)
-        coverage_vec += e_beta_1*att_weights_1 + e_beta_2*att_weights_2          # (batch, max_seq_len, 1)
+        att_cov_dist = e_beta_1*att_weights_1 + e_beta_2*att_weights_2          # (batch, max_seq_len, 1)
+        coverage_vec += att_cov_dist          # (batch, max_seq_len, 1)
         
         cat_input = torch.cat((c3.unsqueeze(1), sent_embed), dim=2)        # (batch, 1, 2*hidden_size + text_embedding_size)
 
@@ -176,4 +177,4 @@ class MultimodalAttentionDecoder(nn.Module):
 
         final_out = self.softmax(self.out(decoder_out))       # (batch, max_transcript_len) # TODO use masked softmax
 
-        return final_out, decoder_hidden.transpose(0,1), decoder_cell_state, coverage_vec
+        return final_out, decoder_hidden.transpose(0,1), decoder_cell_state, att_cov_dist, coverage_vec

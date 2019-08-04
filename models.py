@@ -129,8 +129,9 @@ class MMBiDAF(nn.Module):
         # Teacher forcing
         eps = 1e-8
         loss = 0
+        cov_loss_wt = 1.0
         for idx in range(batch_target_indices.size(1)):
-            out_distributions, decoder_hidden, decoder_cell_state, coverage_vec = self.multimodal_att_decoder(decoder_input, decoder_hidden, decoder_cell_state, mod_text_audio, mod_text_image, coverage_vec) 
+            out_distributions, decoder_hidden, decoder_cell_state, att_cov_dist, coverage_vec = self.multimodal_att_decoder(decoder_input, decoder_hidden, decoder_cell_state, mod_text_audio, mod_text_image, coverage_vec) 
 
             decoder_input = list()
             for batch_idx in range(batch_target_indices.size(0)):
@@ -143,8 +144,12 @@ class MMBiDAF(nn.Module):
                 decoder_input.append(embedded_text[batch_idx, int(batch_target_indices[batch_idx, idx])].unsqueeze(0))         # (1, embedding_size)
             decoder_input = torch.stack(decoder_input)              # (batch_size, 1, embedding_size)
 
-        print(out_distributions.size())
-        sys.exit()              # Debugging purpose
+        coverage_loss = torch.sum(torch.sum(torch.min(att_cov_dist, coverage_vec), 1))      # 1D tensor
+        loss += cov_loss_wt * coverage_loss                         # adding the coverage loss to the model loss
+        loss /= batch_target_indices.size(1)                        # average loss for all the timesteps
+
+        # print(out_distributions.size())
+        # sys.exit()              # Debugging purpose
 #         print(len(out_distributions))
 #         print(out_distributions[0].size())
 

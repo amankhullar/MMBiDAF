@@ -74,6 +74,12 @@ def main(course_dir, text_embedding_size, audio_embedding_size, image_embedding_
 
             # Forward
             out_distributions, loss = model(batch_text, original_text_lengths, batch_audio, original_audio_lengths, batch_images, original_img_lengths, batch_target_indices, original_target_len)
+            loss_val = loss.item()           # numerical value of loss
+
+            # Backward
+            loss.backward()
+            optimizer.step()
+            scheduler.step()
 
             # Generate summary
             print('Generated summary for iteration {}: '.format(epoch))
