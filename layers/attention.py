@@ -132,10 +132,8 @@ class MultimodalAttentionDecoder(nn.Module):
         # For multimodal attention
         self.W_beta_1 = nn.Linear(2 * self.hidden_size, 2 * self.hidden_size)       # the decoder hidden size should be 2 * hidden_size at every timestep (For decoder hidden state)
         self.W_beta_2 = nn.Linear(self.hidden_size, 2 * self.hidden_size)       # Linear layer c1
-        self.W_beta_c1 = nn.Linear(1, 2 * self.hidden_size)                     # Linear layer for coverage
         self.W_beta_3 = nn.Linear(2 * self.hidden_size, 2 * self.hidden_size)       # the decoder hidden size should be 2 * hidden_size at every timestep (For decoder hidden state)
         self.W_beta_4 = nn.Linear(self.hidden_size, 2 * self.hidden_size)       # Linear layer c2
-        self.W_beta_c2 = nn.Linear(1, 2 * self.hidden_size)                     # Linear layer for coverage
         self.v_beta_1 = nn.Linear(2 * self.hidden_size, 1)
         self.v_beta_2 = nn.Linear(2 * self.hidden_size, 1)
 
@@ -160,12 +158,12 @@ class MultimodalAttentionDecoder(nn.Module):
         # For the multimodal attention
         # e3 = self.v3(self.tanh(self.W5(c1) + self.W2(c2)))      # (batch, 1)
         # c3 = e3 * c1 + e3 * c2              # (batch, 2 * hidden_size)
-        e_beta_1 = self.v_beta_1(self.tanh(self.W_beta_1(c1.unsqueeze(1)) + self.W_beta_2(decoder_hidden) + self.W_beta_c1(coverage_vec)))  # (batch, max_seq_len, 1)
-        beta_1 = e_beta_1 * c1          # (batch, max_seq_len, 2 * hidden_size)
+        e_beta_1 = self.v_beta_1(self.tanh(self.W_beta_1(c1.unsqueeze(1)) + self.W_beta_2(decoder_hidden)))  # (batch, num_dir*num_layers, 1)
+        beta_1 = e_beta_1 * c1          # (batch, num_dir*num_layers, 2 * hidden_size)
         beta_1 = torch.sum(beta_1, dim=1)       # (batch, 2 * hidden_size)
 
-        e_beta_2 = self.v_beta_2(self.tanh(self.W_beta_3(c2.unsqueeze(1)) + self.W_beta_4(decoder_hidden) + self.W_beta_c2(coverage_vec)))  # (batch, max_seq_len, 1)
-        beta_2 = e_beta_2 * c2          # (batch, max_seq_len, 2 * hidden_size)
+        e_beta_2 = self.v_beta_2(self.tanh(self.W_beta_3(c2.unsqueeze(1)) + self.W_beta_4(decoder_hidden)))  # (batch, num_dir*num_layers, 1)
+        beta_2 = e_beta_2 * c2          # (batch, num_layers*num_dir, 2 * hidden_size)
         beta_2 = torch.sum(beta_2, dim=1)   # (batch, 2 * hidden_size)
 
         c3 = beta_1*c1 + beta_2*c2            # (batch, 2 * hidden_size)
