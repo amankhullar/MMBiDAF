@@ -54,7 +54,6 @@ def main(course_dir, text_embedding_size, audio_embedding_size, image_embedding_
     # Let's do this!
     step = 0
     model.train()
-    model.float()
     hidden_state = None
     epoch = 0
     loss = 0
@@ -67,10 +66,6 @@ def main(course_dir, text_embedding_size, audio_embedding_size, image_embedding_
             batch_size = batch_text.size(0)
             optimizer.zero_grad()
             epoch += 1
-            # Required for debugging
-            batch_text = batch_text.float()
-            batch_audio = batch_audio.float()
-            batch_images = batch_images.float()
 
             # Forward
             out_distributions, loss = model(batch_text, original_text_lengths, batch_audio, original_audio_lengths, batch_images, original_img_lengths, batch_target_indices, original_target_len)
@@ -99,14 +94,6 @@ def main(course_dir, text_embedding_size, audio_embedding_size, image_embedding_
             ax = sns.heatmap(out_distributions)
             fig = ax.get_figure()
             fig.savefig(out_heatmaps_dir + str(epoch) + '.png')
-
-            # Backward
-            loss.backward(retain_graph=True)
-            optimizer.step()
-            scheduler.step()
-            print('Loss for Epoch {} : '.format(epoch))
-            print(loss)
-#             break
 
 
 def get_generated_summary(out_distributions, original_text_length, source_path):
