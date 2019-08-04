@@ -138,8 +138,8 @@ class MMBiDAF(nn.Module):
                 loss += -1 * torch.log(prob + eps)
                 print("Loss = {}".format(loss))
 
-                decoder_input.append(embedded_text[batch_idx, int(batch_target_indices[batch_idx, idx])].unsqueeze(0))         # TODO :Pythonic way
-            decoder_input = torch.stack(decoder_input)
+                decoder_input.append(embedded_text[batch_idx, int(batch_target_indices[batch_idx, idx])].unsqueeze(0))         # (1, embedding_size)
+            decoder_input = torch.stack(decoder_input)              # (batch_size, 1, embedding_size)
 
         print(out_distributions.size())
         sys.exit()              # Debugging purpose
