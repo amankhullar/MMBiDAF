@@ -91,7 +91,7 @@ class MMBiDAF(nn.Module):
         mask = idx < len_expanded
         return mask
 
-    def forward(self, embedded_text, original_text_lengths, embedded_audio, original_audio_lengths, transformed_images, original_image_lengths, batch_target_indices, original_target_len):
+    def forward(self, embedded_text, original_text_lengths, embedded_audio, original_audio_lengths, transformed_images, original_image_lengths, batch_target_indices, original_target_len, max_dec_len):
         text_emb = self.emb(embedded_text)                                                          # (batch_size, num_sentences, hidden_size)
         print("Highway Embedded text")
         text_encoded, _ = self.text_enc(text_emb, original_text_lengths)                               # (batch_size, num_sentences, 2 * hidden_size)
@@ -153,33 +153,54 @@ class MMBiDAF(nn.Module):
         decoder_input = decoder_input.to(self.device)
         coverage_vec = coverage_vec.to(self.device)
 
-        # Teacher forcing
         eps = 1e-8
         loss = 0
         cov_loss_wt = 1.0
         out_distributions = []
-        for idx in range(batch_target_indices.size(1)):
-            out_distribution, decoder_hidden, decoder_cell_state, att_cov_dist, coverage_vec = self.multimodal_att_decoder(decoder_input, decoder_hidden, decoder_cell_state, mod_text_audio, mod_text_image, coverage_vec, decoder_mask) 
 
-            decoder_input = list()
-            for batch_idx in range(batch_target_indices.size(0)):
-                # Loss calculation
-                prob = out_distributions[batch_idx, int(batch_target_indices[batch_idx, idx])]
-                print("Prob = {}".format(prob))
-                loss += -1 * torch.log(prob + eps)
-                print("Loss = {}".format(loss))
+        if self.training:          # Teacher forcing
+            for idx in range(batch_target_indices.size(1)):
+                out_distribution, decoder_hidden, decoder_cell_state, att_cov_dist, coverage_vec = self.multimodal_att_decoder(decoder_input, decoder_hidden, decoder_cell_state, mod_text_audio, mod_text_image, coverage_vec, decoder_mask) 
 
-                decoder_input.append(embedded_text[batch_idx, int(batch_target_indices[batch_idx, idx])].unsqueeze(0))         # (1, embedding_size)
-            decoder_input = torch.stack(decoder_input)              # (batch_size, 1, embedding_size)
-            out_distributions.append(out_distribution)
+                decoder_input = list()
+                for batch_idx in range(batch_target_indices.size(0)):
+                    # Loss calculation
+                    prob = out_distribution[batch_idx, int(batch_target_indices[batch_idx, idx])]
+                    print("Prob = {}".format(prob))
+                    loss += -1 * torch.log(prob + eps)
+                    print("Loss = {}".format(loss))
 
-        coverage_loss = torch.sum(torch.min(att_cov_dist, coverage_vec))      # 1D tensor
-        loss += cov_loss_wt * coverage_loss                         # adding the coverage loss to the model loss
-        loss /= batch_target_indices.size(1)                        # average loss for all the timesteps
+                    decoder_input.append(embedded_text[batch_idx, int(batch_target_indices[batch_idx, idx])].unsqueeze(0))         # (1, embedding_size)
+                decoder_input = torch.stack(decoder_input)              # (batch_size, 1, embedding_size)
+                out_distributions.append(out_distribution)              # (max_timesteps, batch_size, total_max_len)
+
+            coverage_loss = torch.sum(torch.min(att_cov_dist, coverage_vec))      # 1D tensor
+            loss += cov_loss_wt * coverage_loss                         # adding the coverage loss to the model loss
+            loss /= batch_target_indices.size(1)                        # average loss for all the timesteps
+
+        else:           # Evaluation time of the decoder
+            for idx in range(max_dec_len):           
+                out_distribution, decoder_hidden, decoder_cell_state, att_cov_dist, coverage_vec = self.multimodal_att_decoder(decoder_input, decoder_hidden, decoder_cell_state, mod_text_audio, mod_text_image, coverage_vec, decoder_mask)
+                _, max_prob_idx = torch.max(out_distribution, 1)
+                decoder_input = list()
+                for batch_idx in range(text_emb.size(0)):
+                    # Loss calculation
+                    prob = out_distribution[batch_idx, int(batch_target_indices[batch_idx, idx])]
+                    print("Prob = {}".format(prob))
+                    loss += -1 * torch.log(prob + eps)
+                    print("Loss = {}".format(loss))
+
+                    decoder_input.append(embedded_text[batch_idx, int(max_prob_idx[batch_idx])].unsqueeze(0))         # (1, embedding_size)
+                decoder_input = torch.stack(decoder_input)              # (batch_size, 1, embedding_size)
+                out_distributions.append(out_distribution)              # (max_timesteps, batch_size, total_max_len)
+            
+            coverage_loss = torch.sum(torch.min(att_cov_dist, coverage_vec))      # 1D tensor
+            loss += cov_loss_wt * coverage_loss                         # adding the coverage loss to the model loss
+            loss /= max_dec_len                                         # average loss for all the timesteps
 
         # print(out_distributions.size())
         # sys.exit()              # Debugging purpose
 #         print(len(out_distributions))
 #         print(out_distributions[0].size())
-
+        out_distributions = torch.stack(out_distributions).transpose(0,1)       # (batch_size, max_timesteps, toal_max_len)
         return out_distributions, loss

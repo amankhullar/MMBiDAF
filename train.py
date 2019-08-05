@@ -143,6 +143,7 @@ def main(course_dir, text_embedding_size, audio_embedding_size, image_embedding_
         with torch.enable_grad(), tqdm(total=len(train_text_loader.dataset)) as progress_bar:
             for (batch_text, original_text_lengths), (batch_audio, original_audio_lengths), (batch_images, original_img_lengths), (batch_target_indices, batch_source_paths, batch_target_paths, original_target_len) in zip(train_text_loader, train_audio_loader, train_image_loader, train_target_loader):
                 loss = 0
+                max_dec_len = torch.max(original_target_len)             # TODO check error : max decoder timesteps for each batch 
 
                 # Transfer tensors to GPU
                 batch_text = batch_text.to(device)
@@ -160,7 +161,7 @@ def main(course_dir, text_embedding_size, audio_embedding_size, image_embedding_
                 
                 log.info("Starting forward pass")
                 # Forward
-                out_distributions, loss = model(batch_text, original_text_lengths, batch_audio, original_audio_lengths, batch_images, original_img_lengths, batch_target_indices, original_target_len)
+                out_distributions, loss = model(batch_text, original_text_lengths, batch_audio, original_audio_lengths, batch_images, original_img_lengths, batch_target_indices, original_target_len, max_dec_len)
                 loss_val = loss.item()           # numerical value of loss
                 
                 log.info("Starting backward")
@@ -184,6 +185,21 @@ def main(course_dir, text_embedding_size, audio_embedding_size, image_embedding_
                 
                 print("Reached here")
                 sys.exit()
+
+                steps_till_eval -= batch_size
+                if steps_till_eval <= 0:
+                    steps_till_eval = args.eval_steps
+
+                    # Evaluate and save checkpoint
+                    log.info(f'Evaluating at step {step}...')
+                    ema.assign(model)
+                    # TODO
+                    scores, results = evaluate(model, dev_loader, device,
+                                                  args.dev_eval_file,
+                                                  args.max_ans_len,
+                                                  args.use_squad_v2)
+                    saver.save(step, model, results[args.metric_name], device)
+                    ema.resume(model)
 
                 # Generate summary
                 print('Generated summary for iteration {}: '.format(epoch))
