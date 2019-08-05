@@ -113,11 +113,17 @@ class MMBiDAF(nn.Module):
         text_mask = self.get_mask(embedded_text, original_text_lengths)
         audio_mask = self.get_mask(embedded_audio, original_audio_lengths)
         image_mask = self.get_mask(image_emb, original_image_lengths)
+
+        # Generate mask with size = max_transcript_length for the decoder
+        text_mask_pad = torch.zeros(text_mask.size(0), self.max_transcript_length - text_mask.size(1))
+        text_mask_pad = text_mask_pad.type(text_mask.type())
+        decoder_mask = torch.cat((text_mask, text_mask_pad), dim=1)
         
         # Loading the tensors to device
         text_mask = text_mask.to(self.device)
         audio_mask = audio_mask.to(self.device)
         image_mask = image_mask.to(self.device)
+        decoder_mask = decoder_mask.to(self.device)
 
         text_audio_att = self.bidaf_att_audio(text_encoded, audio_encoded, text_mask, audio_mask)   # (batch_size, num_sentences, 8 * hidden_size)
         text_image_att = self.bidaf_att_image(text_encoded, image_encoded, text_mask, image_mask)   # (batch_size, num_sentences, 8 * hidden_size)
@@ -149,7 +155,7 @@ class MMBiDAF(nn.Module):
         loss = 0
         cov_loss_wt = 1.0
         for idx in range(batch_target_indices.size(1)):
-            out_distributions, decoder_hidden, decoder_cell_state, att_cov_dist, coverage_vec = self.multimodal_att_decoder(decoder_input, decoder_hidden, decoder_cell_state, mod_text_audio, mod_text_image, coverage_vec) 
+            out_distributions, decoder_hidden, decoder_cell_state, att_cov_dist, coverage_vec = self.multimodal_att_decoder(decoder_input, decoder_hidden, decoder_cell_state, mod_text_audio, mod_text_image, coverage_vec, decoder_mask) 
 
             decoder_input = list()
             for batch_idx in range(batch_target_indices.size(0)):
@@ -162,7 +168,7 @@ class MMBiDAF(nn.Module):
                 decoder_input.append(embedded_text[batch_idx, int(batch_target_indices[batch_idx, idx])].unsqueeze(0))         # (1, embedding_size)
             decoder_input = torch.stack(decoder_input)              # (batch_size, 1, embedding_size)
 
-        coverage_loss = torch.sum(torch.sum(torch.min(att_cov_dist, coverage_vec), 1))      # 1D tensor
+        coverage_loss = torch.sum(torch.min(att_cov_dist, coverage_vec))      # 1D tensor
         loss += cov_loss_wt * coverage_loss                         # adding the coverage loss to the model loss
         loss /= batch_target_indices.size(1)                        # average loss for all the timesteps
 
