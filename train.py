@@ -33,13 +33,16 @@ from args import get_train_args
 
 
 def gen_train_val_indices(dataset, validation_split=0.1, shuffle=True):
+    # Ignore indices from test set and videos where ground-truth is missing
     with open('test_indices.pkl', 'rb') as f:
         test_indices = pickle.load(f)
+    with open('none_idxs.pkl', 'rb') as f:
+        none_indices = pickle.load(f)
+
     dataset_size = len(dataset)
-    print("dataset_size: " + str(dataset_size))
-    indices = [idx for idx in range(dataset_size) if idx not in test_indices]
-    print("indices len: " + str(len(indices)))
+    indices = [idx for idx in range(dataset_size) if idx not in test_indices and idx not in none_indices]
     split = int(np.floor(validation_split * len(indices)))
+
     if shuffle :
         np.random.seed(args.seed)
         np.random.shuffle(indices)

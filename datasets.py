@@ -11,6 +11,7 @@ from PIL import Image
 from torch.utils.data import Dataset
 from nltk.tokenize import sent_tokenize
 
+final_indices_path = 'dataset_inter.pkl'
 
 class TextDataset(Dataset):
     """
@@ -22,7 +23,7 @@ class TextDataset(Dataset):
              courses_dir (string) : The directory containing the embeddings for the preprocessed sentences 
         """
         self.courses_dir = courses_dir
-        with open('dataset_inter.pkl', 'rb') as f:
+        with open(final_indices_path, 'rb') as f:
             self.dataset_inter = pickle.load(f)
         self.text_embedding_paths = self.load_sentence_embeddings_path()
         self.max_text_length = max_text_length
@@ -86,7 +87,7 @@ class ImageDataset(Dataset):
         self.courses_dir = courses_dir
         self.transform = transform
         self.num_videos = 0
-        with open('dataset_inter.pkl', 'rb') as f:
+        with open(final_indices_path, 'rb') as f:
             self.dataset_inter = pickle.load(f)
         self.image_paths = self.load_image_paths()
 
@@ -144,7 +145,7 @@ class AudioDataset(Dataset):
         """
         self.courses_dir = courses_dir
         # self.audios_paths = sorted(os.listdir(self.courses_dir), key = self.get_num)
-        with open('dataset_inter.pkl', 'rb') as f:
+        with open(final_indices_path, 'rb') as f:
             self.dataset_inter = pickle.load(f)
         self.audios_paths = self.load_audio_path()
 
@@ -194,7 +195,7 @@ class TargetDataset(Dataset):
              courses_dir (string) : The directory containing the entire dataset.
         """
         self.courses_dir = courses_dir
-        with open('dataset_inter.pkl', 'rb') as f:
+        with open(final_indices_path, 'rb') as f:
             self.dataset_inter = pickle.load(f)
         self.target_sentences_path = self.load_target_sentences_path()
         self.source_sentences_path = self.load_source_sentences_path()
