@@ -26,8 +26,9 @@ class MMBiDAF(nn.Module):
         drop_prob (float) : Dropout probability.
     """
 
-    def __init__(self, hidden_size, text_embedding_size, audio_embedding_size, image_embedding_size, drop_prob=0., max_transcript_length=405):
+    def __init__(self, hidden_size, text_embedding_size, audio_embedding_size, image_embedding_size, device, drop_prob=0., max_transcript_length=405):
         super(MMBiDAF, self).__init__()
+        self.device = device
         self.emb = Embedding(embedding_size=text_embedding_size,
                              hidden_size=hidden_size,
                              drop_prob=drop_prob)
@@ -89,22 +90,34 @@ class MMBiDAF(nn.Module):
 
     def forward(self, embedded_text, original_text_lengths, embedded_audio, original_audio_lengths, transformed_images, original_image_lengths, batch_target_indices, original_target_len):
         text_emb = self.emb(embedded_text)                                                          # (batch_size, num_sentences, hidden_size)
+        print("Highway Embedded text")
         text_encoded, _ = self.text_enc(text_emb, original_text_lengths)                               # (batch_size, num_sentences, 2 * hidden_size)
+        print("Text encoding")
 
         audio_emb = self.a_emb(embedded_audio)                                                      # (batch_size, num_audio_envelopes, hidden_size)
+        print("Highway Embedded Audio")
         audio_encoded, _ = self.audio_enc(audio_emb, original_audio_lengths)                           # (batch_size, num_audio_envelopes, 2 * hidden_size)
+        print("Audio encoding")
 
         original_images_size = transformed_images.size()                                             # (batch_size, num_keyframes, num_channels, transformed_image_size, transformed_image_size)
         # Combine images across videos in a batch into a single dimension to be embedded by ResNet
         transformed_images = torch.reshape(transformed_images, (-1, transformed_images.size(2), transformed_images.size(3), transformed_images.size(4)))    # (batch_size * num_keyframes, num_channels, transformed_image_size, transformed_image_size)
         image_emb = self.image_keyframes_emb(transformed_images)                                    # (batch_size * num_keyframes, encoded_image_size=1000)
+        print("Resnet Image")
         image_emb = torch.reshape(image_emb, (original_images_size[0], original_images_size[1], -1))  # (batch_size, num_keyframes, 300)
         image_emb = self.i_emb(image_emb)                                                             # (batch_size, num_keyframes, hidden_size)
+        print("Highway Image")
         image_encoded, _ = self.image_enc(image_emb, original_image_lengths)                           # (batch_size, num_keyframes, 2 * hidden_size)
+        print("Image Encoding")
 
         text_mask = self.get_mask(embedded_text, original_text_lengths)
         audio_mask = self.get_mask(embedded_audio, original_audio_lengths)
         image_mask = self.get_mask(image_emb, original_image_lengths)
+        
+        # Loading the tensors to device
+        text_mask = text_mask.to(self.device)
+        audio_mask = audio_mask.to(self.device)
+        image_mask = image_mask.to(self.device)
 
         text_audio_att = self.bidaf_att_audio(text_encoded, audio_encoded, text_mask, audio_mask)   # (batch_size, num_sentences, 8 * hidden_size)
         text_image_att = self.bidaf_att_image(text_encoded, image_encoded, text_mask, image_mask)   # (batch_size, num_sentences, 8 * hidden_size)
@@ -125,6 +138,11 @@ class MMBiDAF(nn.Module):
         decoder_input = torch.zeros(text_emb.size(0), 1, embedded_text.size(-1))                    # (batch, num_dir*num_layers, embedding_size)
 
         coverage_vec = torch.zeros(text_emb.size(0), text_emb.size(1), 1)                           # (batch_size, max_seq_len, 1)
+        # Loading the tensors to the GPU
+        decoder_hidden = decoder_hidden.to(self.device)
+        decoder_cell_state = decoder_cell_state.to(self.device)
+        decoder_input = decoder_input.to(self.device)
+        coverage_vec = coverage_vec.to(self.device)
 
         # Teacher forcing
         eps = 1e-8

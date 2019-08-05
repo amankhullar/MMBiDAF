@@ -138,7 +138,7 @@ class ImageEmbedding(nn.Module):
         out = self.resnet(images)      # (batch_size, 1000)
         return out
 
-    def fine_tune(self, fine_tune = True):
+    def fine_tune(self, fine_tune = False):
         """
         Allow or prevent the calculation of gradients for convolutional blocks 2 through 4 of the encoder.
 

@@ -23,13 +23,31 @@ from datasets import *
 from models import MMBiDAF
 from PIL import Image
 from rouge import Rouge
-# from tensorboardX import SummaryWriter
+from tensorboardX import SummaryWriter
 from tqdm import tqdm
 from ujson import load as json_load
 from nltk.tokenize import sent_tokenize
 
+import util
+from args import get_train_args
 
-def main(course_dir, text_embedding_size, audio_embedding_size, image_embedding_size, hidden_size, drop_prob, max_text_length, out_heatmaps_dir, batch_size=3, num_epochs=100):
+
+def main(course_dir, text_embedding_size, audio_embedding_size, image_embedding_size, hidden_size, drop_prob, max_text_length, out_heatmaps_dir, args, batch_size=3, num_epochs=100):
+    # Set up logging and devices
+    args.save_dir = util.get_save_dir(args.save_dir, args.name, training=True)
+    log = util.get_logger(args.save_dir, args.name)
+    tbx = SummaryWriter(args.save_dir)
+    device, args.gpu_ids = util.get_available_devices()
+    log.info(f'Args: {dumps(vars(args), indent=4, sort_keys=True)}')
+    args.batch_size *= max(1, len(args.gpu_ids))
+
+    # Set random seed
+    log.info(f'Using random seed {args.seed}...')
+    random.seed(args.seed)
+    np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
+    torch.cuda.manual_seed_all(args.seed)
+
     # Get sentence embeddings
     train_text_loader = torch.utils.data.DataLoader(TextDataset(course_dir, max_text_length), batch_size = batch_size, shuffle = False, num_workers = 2, collate_fn=collator)
 
@@ -44,56 +62,106 @@ def main(course_dir, text_embedding_size, audio_embedding_size, image_embedding_
     # Load Target text
     train_target_loader = torch.utils.data.DataLoader(TargetDataset(course_dir), batch_size = batch_size, shuffle = False, num_workers = 2, collate_fn=target_collator)
 
+    assert len(train_text_loader.dataset) == len(train_image_loader.dataset) and len(train_text_loader.dataset) == len(train_audio_loader.dataset), "Unequal dataset lengths"
+
     # Create model
-    model = MMBiDAF(hidden_size, text_embedding_size, audio_embedding_size, image_embedding_size, drop_prob, max_text_length)
+    model = MMBiDAF(hidden_size, text_embedding_size, audio_embedding_size, image_embedding_size, device, drop_prob, max_text_length)
+    model = nn.DataParallel(model, args.gpu_ids)
+    if args.load_path:
+        log.info(f'Loading checkpoint from {args.load_path}...')
+        model, step = util.load_model(model, args.load_path, args.gpu_ids)
+    else:
+        step = 0
+    model = model.to(device)
+    model.train()
+    ema = util.EMA(model, args.ema_decay)           # For exponential moving average
+
+    # Get saver
+    saver = util.CheckpointSaver(args.save_dir,
+                                 max_checkpoints=args.max_checkpoints,
+                                 metric_name=args.metric_name,
+                                 maximize_metric=args.maximize_metric,
+                                 log=log)           # Need to change the metric name
 
     # Get optimizer and scheduler
-    optimizer = optim.Adadelta(model.parameters(), 1e-4)
+    optimizer = optim.Adadelta(model.parameters(), args.lr, weight_decay=args.l2_wd)
     scheduler = sched.LambdaLR(optimizer, lambda s: 1.)  # Constant LR
 
+    # TODO : Add the dev and the test dataset loaders
+
     # Let's do this!
-    step = 0
-    model.train()
-    hidden_state = None
-    epoch = 0
     loss = 0
     eps = 1e-8
+    log.info("Training...")
+    steps_till_eval = args.eval_steps
+    epoch = step // len(TextDataset(course_dir, max_text_length))
 
-    with torch.enable_grad(), tqdm(total=max(len(train_text_loader.dataset), len(train_image_loader.dataset), len(train_audio_loader.dataset))) as progress_bar:
-        for (batch_text, original_text_lengths), (batch_audio, original_audio_lengths), (batch_images, original_img_lengths), (batch_target_indices, source_path, target_path, original_target_len) in zip(train_text_loader, train_audio_loader, train_image_loader, train_target_loader):
-            loss = 0
-            # Setup for forward
-            batch_size = batch_text.size(0)
-            optimizer.zero_grad()
-            epoch += 1
+    while epoch != args.num_epochs:
+        epoch += 1
+        log.info("Starting epoch {epoch}...")
+        with torch.enable_grad(), tqdm(total=len(train_text_loader.dataset)) as progress_bar:
+            for (batch_text, original_text_lengths), (batch_audio, original_audio_lengths), (batch_images, original_img_lengths), (batch_target_indices, source_path, target_path, original_target_len) in zip(train_text_loader, train_audio_loader, train_image_loader, train_target_loader):
+                loss = 0
 
-            # Forward
-            out_distributions, loss = model(batch_text, original_text_lengths, batch_audio, original_audio_lengths, batch_images, original_img_lengths, batch_target_indices, original_target_len)
-            loss_val = loss.item()           # numerical value of loss
+                # Transfer tensors to GPU
+                batch_text = batch_text.to(device)
+                log.info("Loaded batch text")
+                batch_audio = batch_audio.to(device)
+                log.info("Loaded batch audio")
+                batch_images = batch_images.to(device)
+                log.info("Loaded batch image")
+                batch_target_indices = batch_target_indices.to(device)
+                log.info("Loaded batch targets")
 
-            # Backward
-            loss.backward()
-            optimizer.step()
-            scheduler.step()
+                # Setup for forward
+                batch_size = batch_text.size(0)
+                optimizer.zero_grad()
+                
+                log.info("Starting forward pass")
+                # Forward
+                out_distributions, loss = model(batch_text, original_text_lengths, batch_audio, original_audio_lengths, batch_images, original_img_lengths, batch_target_indices, original_target_len)
+                loss_val = loss.item()           # numerical value of loss
+                
+                log.info("Starting backward")
 
-            # Generate summary
-            print('Generated summary for iteration {}: '.format(epoch))
-            summary = get_generated_summary(out_distributions, original_text_length, source_path)
-            print(summary)
-            
-            # Evaluation
-            rouge = Rouge()
-            rouge_scores = rouge.get_scores(source_path, target_path, avg=True)
-            print('Rouge score at iteration {} is {}: '.format(epoch, rouge_scores))
+                # Backward
+                loss.backward()
+                nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)        # To tackle exploding gradients
+                optimizer.step()
+                scheduler.step(step // batch_size)
+                ema(model, step // batch_size)
 
-            # Generate Output Heatmaps
-            sns.set()
-            for idx in range(len(out_distributions)):
-                out_distributions[idx] = out_distributions[idx].squeeze(0).detach().numpy()      # Converting each timestep distribution to numpy array
-            out_distributions = np.asarray(out_distributions)   # Converting the timestep list to array
-            ax = sns.heatmap(out_distributions)
-            fig = ax.get_figure()
-            fig.savefig(out_heatmaps_dir + str(epoch) + '.png')
+                # Log info
+                step += batch_size
+                progress_bar.update(batch_size)
+                progress_bar.set_postfix(epoch=epoch,
+                                         NLL=loss_val)
+                tbx.add_scalar('train/NL', loss_val, step)
+                tbx.add_scalar('train/LR',
+                               optimizer.param_groups[0]['lr'],
+                               step)
+                
+                print("Reached here")
+                sys.exit()
+
+                # Generate summary
+                print('Generated summary for iteration {}: '.format(epoch))
+                summary = get_generated_summary(out_distributions, original_text_lengths, source_path)
+                print(summary)
+                
+                # Evaluation
+                rouge = Rouge()
+                rouge_scores = rouge.get_scores(source_path, target_path, avg=True)
+                print('Rouge score at iteration {} is {}: '.format(epoch, rouge_scores))
+
+                # Generate Output Heatmaps
+                sns.set()
+                for idx in range(len(out_distributions)):
+                    out_distributions[idx] = out_distributions[idx].squeeze(0).detach().numpy()      # Converting each timestep distribution to numpy array
+                out_distributions = np.asarray(out_distributions)   # Converting the timestep list to array
+                ax = sns.heatmap(out_distributions)
+                fig = ax.get_figure()
+                fig.savefig(out_heatmaps_dir + str(epoch) + '.png')
 
 
 def get_generated_summary(out_distributions, original_text_length, source_path):
@@ -152,4 +220,5 @@ if __name__ == '__main__':
     num_epochs = 100
     batch_size = 3
     out_heatmaps_dir = '/home/amankhullar/model/output_heatmaps/'
-    main(course_dir, text_embedding_size, audio_embedding_size, image_embedding_size, hidden_size, drop_prob, max_text_length, out_heatmaps_dir, batch_size, num_epochs)
+    args = get_train_args()
+    main(course_dir, text_embedding_size, audio_embedding_size, image_embedding_size, hidden_size, drop_prob, max_text_length, out_heatmaps_dir, args, batch_size, num_epochs)
