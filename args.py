@@ -94,7 +94,7 @@ def add_train_test_args(parser):
     parser.add_argument('--name',
                         '-n',
                         type=str,
-                        required=True,
+                        default='temp',
                         help='Name to identify training or test run.')
     parser.add_argument('--max_ans_len',
                         type=int,

@@ -28,7 +28,10 @@ class MMBiDAF(nn.Module):
 
     def __init__(self, hidden_size, text_embedding_size, audio_embedding_size, image_embedding_size, device, drop_prob=0., max_transcript_length=405):
         super(MMBiDAF, self).__init__()
+
         self.device = device
+        self.max_transcript_length = max_transcript_length
+
         self.emb = Embedding(embedding_size=text_embedding_size,
                              hidden_size=hidden_size,
                              drop_prob=drop_prob)
