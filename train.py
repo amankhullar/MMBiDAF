@@ -141,7 +141,7 @@ def main(course_dir, text_embedding_size, audio_embedding_size, image_embedding_
         epoch += 1
         log.info("Starting epoch {epoch}...")
         with torch.enable_grad(), tqdm(total=len(train_text_loader.dataset)) as progress_bar:
-            for (batch_text, original_text_lengths), (batch_audio, original_audio_lengths), (batch_images, original_img_lengths), (batch_target_indices, source_path, target_path, original_target_len) in zip(train_text_loader, train_audio_loader, train_image_loader, train_target_loader):
+            for (batch_text, original_text_lengths), (batch_audio, original_audio_lengths), (batch_images, original_img_lengths), (batch_target_indices, batch_source_paths, batch_target_paths, original_target_len) in zip(train_text_loader, train_audio_loader, train_image_loader, train_target_loader):
                 loss = 0
 
                 # Transfer tensors to GPU
@@ -187,38 +187,42 @@ def main(course_dir, text_embedding_size, audio_embedding_size, image_embedding_
 
                 # Generate summary
                 print('Generated summary for iteration {}: '.format(epoch))
-                summary = get_generated_summary(out_distributions, original_text_lengths, source_path)
-                print(summary)
+                summaries = get_generated_summaries(out_distributions, original_text_lengths, batch_source_paths)
+                print(summaries)
                 
                 # Evaluation
-                rouge = Rouge()
-                rouge_scores = rouge.get_scores(source_path, target_path, avg=True)
-                print('Rouge score at iteration {} is {}: '.format(epoch, rouge_scores))
+                # rouge = Rouge()
+                # rouge_scores = rouge.get_scores(batch_source_paths, batch_target_paths, avg=True)
+                # print('Rouge score at iteration {} is {}: '.format(epoch, rouge_scores))
 
                 # Generate Output Heatmaps
-                sns.set()
-                for idx in range(len(out_distributions)):
-                    out_distributions[idx] = out_distributions[idx].squeeze(0).detach().numpy()      # Converting each timestep distribution to numpy array
-                out_distributions = np.asarray(out_distributions)   # Converting the timestep list to array
-                ax = sns.heatmap(out_distributions)
-                fig = ax.get_figure()
-                fig.savefig(out_heatmaps_dir + str(epoch) + '.png')
+                # sns.set()
+                # for idx in range(len(out_distributions)):
+                #     out_distributions[idx] = out_distributions[idx].squeeze(0).detach().numpy()      # Converting each timestep distribution to numpy array
+                # out_distributions = np.asarray(out_distributions)   # Converting the timestep list to array
+                # ax = sns.heatmap(out_distributions)
+                # fig = ax.get_figure()
+                # fig.savefig(out_heatmaps_dir + str(epoch) + '.png')
 
 
-def get_generated_summary(out_distributions, original_text_length, source_path):
-    out_distributions = np.array([dist[0].cpu().detach().numpy() for dist in out_distributions])  # TODO: Batch 0
-    generated_summary = []
-    for timestep, probs in enumerate(out_distributions):
-        if(probs[int(original_text_length)] == np.argmax(probs)):
-            break
-        else:
-            max_prob_idx = np.argmax(probs, 0)
-            generated_summary.append(get_source_sentence(source_path[0], max_prob_idx-1))
+def get_generated_summaries(out_distributions, original_text_length, batch_source_paths):
+    out_distributions = np.array([dist.cpu().detach().numpy() for dist in out_distributions])
+    generated_summaries = []
 
-            # Setting the generated sentence's prob to zero in the remaining timesteps - coverage?
-            out_distributions[:, max_prob_idx] = 0
-    
-    return generated_summary
+    for batch_idx in range(out_distributions.shape[0]):
+        out_distribution = out_distributions[batch_idx, :, :]
+        generated_summary = []
+        for probs in out_distribution: # Looping over timesteps
+            if(probs[int(original_text_length)] == np.argmax(probs)): # EOS
+                break
+            else:
+                max_prob_idx = np.argmax(probs, 0)
+                generated_summary.append(get_source_sentence(batch_source_paths[batch_idx], max_prob_idx-1))
+                # Setting the generated sentence's prob to zero in the remaining timesteps - coverage?
+                # out_distributions[:, max_prob_idx] = 0
+        generated_summaries.append(generated_summary)
+
+    return generated_summaries
 
 def get_source_sentence(source_path, idx):
     lines = []
