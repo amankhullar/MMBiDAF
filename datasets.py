@@ -272,3 +272,16 @@ class TargetDataset(Dataset):
         for idx, sent in enumerate(source_sentences):
             if target_sentence in sent:
                 return idx
+
+def collator(DataLoaderBatch):
+    items = [item[0] for item in DataLoaderBatch]
+    lengths = [num_elements.size(0) for num_elements in items]
+    padded_seq = torch.nn.utils.rnn.pad_sequence(items, batch_first=True, padding_value=0)
+    return padded_seq, lengths
+
+def target_collator(DataLoaderBatch):
+    batch_items = [item for item in DataLoaderBatch]
+    items, source_sent_paths, target_sent_paths, _ = zip(*batch_items)
+    lengths = [len(num_target_sent) for num_target_sent in items]
+    padded_seq = torch.nn.utils.rnn.pad_sequence(items, batch_first=True, padding_value=0)
+    return padded_seq, source_sent_paths, target_sent_paths, lengths

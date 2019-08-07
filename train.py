@@ -30,6 +30,7 @@ from nltk.tokenize import sent_tokenize
 
 import util
 from args import get_train_args
+from evaluate import get_generated_summaries
 
 
 def gen_train_val_indices(dataset, validation_split=0.1, shuffle=True):
@@ -161,7 +162,7 @@ def main(course_dir, text_embedding_size, audio_embedding_size, image_embedding_
                 
                 log.info("Starting forward pass")
                 # Forward
-                out_distributions, loss = model(batch_text, original_text_lengths, batch_audio, original_audio_lengths, batch_images, original_img_lengths, batch_target_indices, original_target_len, max_dec_len)
+                batch_out_distributions, loss = model(batch_text, original_text_lengths, batch_audio, original_audio_lengths, batch_images, original_img_lengths, batch_target_indices, original_target_len, max_dec_len)
                 loss_val = loss.item()           # numerical value of loss
                 
                 log.info("Starting backward")
@@ -203,7 +204,7 @@ def main(course_dir, text_embedding_size, audio_embedding_size, image_embedding_
 
                 # Generate summary
                 print('Generated summary for iteration {}: '.format(epoch))
-                summaries = get_generated_summaries(out_distributions, original_text_lengths, batch_source_paths)
+                summaries = get_generated_summaries(batch_out_distributions, original_text_lengths, batch_source_paths)
                 print(summaries)
                 
                 # Evaluation
@@ -219,56 +220,6 @@ def main(course_dir, text_embedding_size, audio_embedding_size, image_embedding_
                 # ax = sns.heatmap(out_distributions)
                 # fig = ax.get_figure()
                 # fig.savefig(out_heatmaps_dir + str(epoch) + '.png')
-
-
-def get_generated_summaries(out_distributions, original_text_length, batch_source_paths):
-    out_distributions = np.array([dist.cpu().detach().numpy() for dist in out_distributions])
-    generated_summaries = []
-
-    for batch_idx in range(out_distributions.shape[0]):
-        out_distribution = out_distributions[batch_idx, :, :]
-        generated_summary = []
-        for probs in out_distribution: # Looping over timesteps
-            if(probs[int(original_text_length)] == np.argmax(probs)): # EOS
-                break
-            else:
-                max_prob_idx = np.argmax(probs, 0)
-                generated_summary.append(get_source_sentence(batch_source_paths[batch_idx], max_prob_idx-1))
-                # Setting the generated sentence's prob to zero in the remaining timesteps - coverage?
-                # out_distributions[:, max_prob_idx] = 0
-        generated_summaries.append(generated_summary)
-
-    return generated_summaries
-
-def get_source_sentence(source_path, idx):
-    lines = []
-    try:
-        with open(source_path) as f:
-            for line in f:
-                    if re.match(r'\d+:\d+', line) is None:
-                        line = line.replace('[MUSIC]', '')
-                        lines.append(line.strip())
-    except Exception as e:
-        logging.error('Unable to open file. Exception: ' + str(e))
-    else:
-        source_text = ' '.join(lines)
-        source_sentences = sent_tokenize(source_text)
-        for i in range(len(source_sentences)):
-            source_sentences[i] = source_sentences[i].lower()
-        return source_sentences[idx]
-
-def collator(DataLoaderBatch):
-    items = [item[0] for item in DataLoaderBatch]
-    lengths = [num_elements.size(0) for num_elements in items]
-    padded_seq = torch.nn.utils.rnn.pad_sequence(items, batch_first=True, padding_value=0)
-    return padded_seq, lengths
-
-def target_collator(DataLoaderBatch):
-    batch_items = [item for item in DataLoaderBatch]
-    items, source_sent_paths, target_sent_paths, _ = zip(*batch_items)
-    lengths = [len(num_target_sent) for num_target_sent in items]
-    padded_seq = torch.nn.utils.rnn.pad_sequence(items, batch_first=True, padding_value=0)
-    return padded_seq, source_sent_paths, target_sent_paths, lengths
 
 if __name__ == '__main__':
     course_dir = '/home/anish17281/NLP_Dataset/dataset/'
