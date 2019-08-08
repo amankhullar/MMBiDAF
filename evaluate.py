@@ -25,6 +25,13 @@ from json import dumps
 import util
 from args import get_train_args
 
+from rouge import Rouge
+from nltk import PorterStemmer
+
+from sklearn.metrics import f1_score
+
+stemmer = PorterStemmer()
+
 def get_test_indices():
     with open('test_indices.pkl', 'rb') as f:
         test_indices = pickle.load(f)
@@ -80,54 +87,81 @@ def evaluate(courses_dir, hidden_size, text_embedding_size, audio_embedding_size
     test_target_loader = torch.utils.data.DataLoader(target_dataset, batch_size=batch_size, shuffle=False, num_workers=2, collate_fn=target_collator, sampler=test_sampler)
 
     batch_idx = 0
-    for (batch_text, original_text_lengths), (batch_audio, original_audio_lengths), (batch_images, original_img_lengths), (batch_target_indices, batch_source_paths, batch_target_paths, original_target_len) in zip(test_text_loader, test_audio_loader, test_image_loader, test_target_loader):
-        batch_idx += 1
+    total_scores = [0]*9        # in order of 'p' 'r' and 'f' for r1, r2, rl
+    with torch.no_grad():
+        for (batch_text, original_text_lengths), (batch_audio, original_audio_lengths), (batch_images, original_img_lengths), \
+            (batch_target_indices, batch_source_paths, batch_target_paths, original_target_len) \
+            in zip(test_text_loader, test_audio_loader, test_image_loader, test_target_loader):
+            batch_idx += 1
 
-        max_dec_len = torch.max(original_target_len)             # TODO check error : max decoder timesteps for each batch 
+            max_dec_len = torch.max(original_target_len)             # TODO check error : max decoder timesteps for each batch 
 
-        # Transfer tensors to GPU
-        batch_text = batch_text.to(device)
-        log.info("Loaded batch text")
-        batch_audio = batch_audio.to(device)
-        log.info("Loaded batch audio")
-        batch_images = batch_images.to(device)
-        log.info("Loaded batch image")
-        batch_target_indices = batch_target_indices.to(device)
-        log.info("Loaded batch targets")
+            # Transfer tensors to GPU
+            batch_text = batch_text.to(device)
+            log.info("Loaded batch text")
+            batch_audio = batch_audio.to(device)
+            log.info("Loaded batch audio")
+            batch_images = batch_images.to(device)
+            log.info("Loaded batch image")
+            batch_target_indices = batch_target_indices.to(device)
+            log.info("Loaded batch targets")
 
-        batch_out_distributions, _ = model(batch_text, original_text_lengths, batch_audio, original_audio_lengths, batch_images, original_img_lengths, batch_target_indices, original_target_len, max_dec_len)
+            batch_out_distributions, _ = model(batch_text, original_text_lengths, batch_audio, original_audio_lengths, \
+                                            batch_images, original_img_lengths, batch_target_indices, original_target_len, max_dec_len)
 
-        # Generate summary for current batch
-        print('Generated summary for batch {}: '.format(batch_idx))
-        summaries = get_generated_summaries(batch_out_distributions, original_text_lengths, batch_source_paths)
-        print(summaries)
+            # Generate summary for current batch
+            print('Generated summary for batch {}: '.format(batch_idx))
+            summaries, gen_idxs = get_generated_summaries(batch_out_distributions, original_text_lengths, batch_source_paths) # (batch_size, beam_size, sents)
+            print(summaries)     
+            
+            # Calculate Rouge score for the current batch
+            all_scrores = compute_rouge(summaries, batch_target_paths, beam_size=5) # tuple of all scores
+            for idx, score in enumerate(all_scrores):
+                total_scores[idx] += score
+
+            # Calculate F1 score for the current batch
+            f1_scores = compute_f1(gen_idxs, batch_target_indices, beam_size=5)
+        
+        # Average Rouge score across batches
+        for idx in range(len(total_scores)):                
+            total_scores[idx] /= batch_idx
+        
+        #Average F1 score
+        f1_scores /= batch_idx
+
+        print("Average Rouge score on the data is : {}".format(total_scores))
+        print("Average F1 score on the data is : {}".format(f1_scores))
 
 def get_generated_summaries(batch_out_distributions, original_text_lengths, batch_source_paths, method='beam', k=5):
     batch_out_distributions = np.array([dist.cpu().detach().numpy() for dist in batch_out_distributions])
     generated_summaries = []
-
+    gen_idxs = []
     for batch_idx in range(batch_out_distributions.shape[0]):
         out_distributions = batch_out_distributions[batch_idx, :, :]
 
         if method == 'beam':
-            summaries = beam_search(out_distributions, original_text_lengths[batch_idx], batch_source_paths[batch_idx], k=k)
+            summaries, idxs = beam_search(out_distributions, original_text_lengths[batch_idx], batch_source_paths[batch_idx], k=k)
         else:
-            generated_summary = greedy_search(out_distributions, original_text_lengths[batch_idx], batch_source_paths[batch_idx])
+            generated_summary, idxs = greedy_search(out_distributions, original_text_lengths[batch_idx], batch_source_paths[batch_idx])
             summaries = [generated_summary]
+            idxs = [idxs]
         generated_summaries.append(summaries)
+        gen_idxs.append(idxs)
 
-    return generated_summaries
+    return generated_summaries, gen_idxs
 
 def greedy_search(out_distributions, original_text_length, source_path):
     generated_summary = []
+    gen_idxs = []
     for probs in out_distributions: # Looping over timesteps
         if(probs[int(original_text_length)] == np.argmax(probs)): # EOS
             break
         max_prob_idx = np.argmax(probs, 0)
         generated_summary.append(get_source_sentence(source_path, max_prob_idx))
+        gen_idxs.append(max_prob_idx)
         # Setting the generated sentence's prob to zero in the remaining timesteps - coverage?
         # out_distributions[:, max_prob_idx] = 0
-    return generated_summary
+    return generated_summary, gen_idxs
 
 def beam_search(out_distributions, original_text_length, source_path, k=5):
     eps = 1e-8
@@ -147,15 +181,19 @@ def beam_search(out_distributions, original_text_length, source_path, k=5):
         sequences = ordered[:k]
     
     beam_summaries = []
+    beam_idxs = []
     for seq in sequences:
         generated_summary = []
+        gen_idxs = []
         for sent_idx in seq[0]:
             if sent_idx == original_text_length:
                 break
             generated_summary.append(get_source_sentence(source_path, sent_idx))
+            gen_idxs.append(sent_idx)
         beam_summaries.append(generated_summary)
+        beam_idxs.append(gen_idxs)
 
-    return beam_summaries
+    return beam_summaries, beam_idxs
 
 def get_source_sentence(source_path, idx):
     lines = []
@@ -173,6 +211,58 @@ def get_source_sentence(source_path, idx):
         for i in range(len(source_sentences)):
             source_sentences[i] = source_sentences[i].lower()
         return source_sentences[idx]
+
+def prepare(gt, res):
+    clean_gt = [" ".join([stemmer.stem(i) for i in line.split()]) for line in gt]
+    clean_res = [" ".join([stemmer.stem(i) for i in line.split()]) for line in res]
+    return clean_gt, clean_res
+
+def get_rouge(clean_gt, clean_res):
+    rouge = Rouge()
+    scores = rouge.get_scores(clean_res, clean_gt, avg=True)
+    return scores
+
+def compute_rouge(summaries, batch_target_paths, beam_size):
+    total_score_r1p = total_score_r1r = total_score_r1f = total_score_r2p = \
+    total_score_r2r = total_score_r2f = total_score_rlp = total_score_rlr = total_score_rlf = 0
+    batch_count = len(summaries)
+    for batch_idx, batch_val in enumerate(summaries):
+        try:
+            with open(batch_target_paths[batch_idx], 'r') as f:
+                gt_data = f.readlines()
+        except Exception as e:
+            print("Cannot open files with error : "+ e)
+        res_data = batch_val[beam_size-1]
+        min_len = min(len(gt_data), len(res_data))
+        gt_data = gt_data[:min_len]
+        res_data = res_data[:min_len]
+        clean_gt, clean_res = prepare(gt_data, res_data)
+        score = get_rouge(clean_gt, clean_res)
+        score_r1p += score['rouge-1']['p']
+        score_r1r += score['rouge-1']['r']
+        score_r1f += score['rouge-1']['f']
+        score_r2p += score['rouge-2']['p']
+        score_r2r += score['rouge-2']['r']
+        score_r2f += score['rouge-2']['f']
+        score_rl1 += score['rouge-l']['p']
+        score_rl2 += score['rouge-l']['r']
+        score_rlf += score['rouge-l']['f']
+    
+    return (total_score_r1p/batch_count, total_score_r1r/batch_count, total_score_r1f/batch_count, \
+        total_score_r2p/batch_count, total_score_r2r/batch_count, total_score_r2f/batch_count, \
+        total_score_rlp/batch_count, total_score_rlr/batch_count, total_score_rlf/batch_count)
+
+def compute_f1(gen_idxs, batch_target_indices, beam_size):
+    f1_val = 0
+    batch_count = len(gen_idxs)
+    for batch_idx, batch_val in enumerate(gen_idxs):
+        gt_idxs = batch_target_indices[batch_idx].squeeze(0).tolist()
+        res_idxs = batch_val[beam_size-1]
+        min_len = min(len(gt_idxs), len(res_idxs))
+        gt_idxs = gt_idxs[:min_len]
+        res_idxs = res_idxs[:min_len]
+        f1_val += f1_score(gt_idxs, res_idxs, average='macro')          # this average is used in SQUAD dataset
+    return f1_val/batch_count
 
 if __name__ == "__main__":
     hidden_size = 100
