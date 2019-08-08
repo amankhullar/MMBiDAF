@@ -25,7 +25,7 @@ class TextDataset(Dataset):
         self.courses_dir = courses_dir
         with open(final_indices_path, 'rb') as f:
             self.dataset_inter = pickle.load(f)
-        self.text_embeddings_path = self.load_sentence_embeddings_path()
+        self.text_embedding_paths = self.load_sentence_embeddings_path()
         self.max_text_length = max_text_length
 
     def load_sentence_embeddings_path(self):
@@ -56,10 +56,10 @@ class TextDataset(Dataset):
         return int(re.search(r'\d+', str).group())
 
     def __len__(self):
-        return len(self.text_embeddings_path)
+        return len(self.text_embedding_paths)
     
     def __getitem__(self, idx):
-        self.embedding_path = self.text_embeddings_path[idx]
+        self.embedding_path = self.text_embedding_paths[idx]
         self.embedding_dict = torch.load(self.embedding_path)
         word_vectors = torch.zeros(len(self.embedding_dict)+1, 300)
         for count, sentence in enumerate(self.embedding_dict):
@@ -167,7 +167,7 @@ class AudioDataset(Dataset):
                 if path_check not in self.dataset_inter:
                     continue
 
-                path = self.courses_dir + course_number + '/audio-features/' + audio_path
+                path = self.courses_dir + course_number + '/audio-features8/' + audio_path
                 audio_embeddings.append(path)
 
         return audio_embeddings
