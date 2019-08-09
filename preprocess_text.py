@@ -4,6 +4,7 @@ from gensim.models import KeyedVectors
 from nltk import download
 from nltk.corpus import stopwords, words
 from nltk.tokenize import sent_tokenize, word_tokenize, TweetTokenizer
+from nltk.stem import WordNetLemmatizer
 import numpy as np
 import os
 import sys
@@ -36,19 +37,22 @@ def document_vector(glove_model, doc):
     doc = [word for word in doc if word in glove_model.vocab]
     return np.mean(glove_model[doc], axis = 0)
 
-def is_blank_sentence(sentence, words_set):
+def is_blank_sentence(sentence, words_set, lemmatizer):
     for token in sentence:
-        if token in words_set:
+        if lemmatizer.lemmatize(token) in words_set:
             return False
-    print("Found blank sentence!")
+    print("Found blank sentence!: " + str(sentence))
     return True
 
-def generate_embeddings(path, glove_path, sentence_path, words_set):
-    num_files = len([item for item in os.listdir(path) if os.path.isfile(os.path.join(path, item)) and '.txt' in item])
-    for idx in range(1, num_files):
+def generate_embeddings(path, glove_path, sentence_path, words_set, model, lemmatizer):
+    files = [os.path.join(path, item) for item in os.listdir(path) if os.path.isfile(os.path.join(path, item)) and '.txt' in item]
+    for file in files:
+        # if '21.txt' not in file:
+            # continue
+        print("Processing transcript: " + str(file))
         lines = []
         try:
-            with open(path + str(idx) + ".txt") as f:
+            with open(file) as f:
                 for line in f:
                     if re.match('\d+:\d+', line) is None:
                         line = line.replace('[MUSIC]', '')
@@ -60,11 +64,10 @@ def generate_embeddings(path, glove_path, sentence_path, words_set):
             
             stop_words = stopwords.words('english')
             doc = preprocess(text, stop_words)
-            model = get_model(glove_path)
             
             embedding_matrix = {}
             for sentence in doc:
-                if is_blank_sentence(sentence, words_set):
+                if is_blank_sentence(sentence, words_set, lemmatizer):
                     continue
                 single_sentence_embed = document_vector(model, sentence)
     #             x.append(single_sentence_embed)
@@ -74,9 +77,10 @@ def generate_embeddings(path, glove_path, sentence_path, words_set):
                 embedding_matrix[sentence_list] = sentence_embeddings
             
             # Save the embedding dictionary for faster loading
+            idx = os.path.basename(file)[:-4]
             save_path = sentence_path + str(idx) + '.pt'
             torch.save(embedding_matrix, save_path)
-
+            print("Saved " + str(save_path))
         
 def download_data():
     """
@@ -85,16 +89,20 @@ def download_data():
     download('punkt') #tokenizer, run once
     download('stopwords') #stopwords dictionary, run once
 
-def main(base_path, glove_path, words_set):
-    num_courses = 25
-    for idx in range(1, num_courses):
+def main(base_path, glove_path, words_set, model, lemmatizer):
+    start_idx, end_idx = 1, 25
+    # start_idx, end_idx = 4, 5
+    for idx in range(start_idx, end_idx):
+        print("Processing course " + str(idx))
         transcript_path = base_path + str(idx) + "/" + "transcripts/"
-        sentence_path = base_path + str(idx) + '/' + 'sentence_features2/'
+        sentence_path = base_path + str(idx) + '/' + 'sentence_features3/'
         os.system('mkdir ' + sentence_path)
-        generate_embeddings(transcript_path, glove_path, sentence_path, words_set)
+        generate_embeddings(transcript_path, glove_path, sentence_path, words_set, model, lemmatizer)
 
 if __name__ == "__main__":
     base_path = '/home/anish17281/NLP_Dataset/dataset/'
-    glove_path = '/home/amankhullar/glove_data/glove.6B.300d.txt'
-    words_set = set(words.words())
-    main(base_path, glove_path, words_set)
+    glove_path = '/home/udita/multimodal/glove_data/glove.6B.300d.txt'
+    model = get_model(glove_path)
+    words_set = model.vocab
+    lemmatizer = WordNetLemmatizer()
+    main(base_path, glove_path, words_set, model, lemmatizer)
