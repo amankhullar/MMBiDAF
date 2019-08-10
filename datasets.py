@@ -9,9 +9,11 @@ import numpy as np
 import torch
 from PIL import Image
 from torch.utils.data import Dataset
-from nltk.tokenize import sent_tokenize
+from nltk.corpus import stopwords, words
+from nltk.tokenize import sent_tokenize, word_tokenize, TweetTokenizer
+from nltk.stem import WordNetLemmatizer
 
-final_indices_path = 'dataset_inter.pkl'
+final_indices_path = 'dataset_inter2.pkl'
 
 class TextDataset(Dataset):
     """
@@ -47,7 +49,7 @@ class TextDataset(Dataset):
                 if path_check not in self.dataset_inter:
                     continue
 
-                path = self.courses_dir + course_number + '/sentence_features/' + transcript_path
+                path = self.courses_dir + course_number + '/sentence_features3/' + transcript_path
                 transcript_embeddings.append(path)
         
         return transcript_embeddings
@@ -199,6 +201,9 @@ class TargetDataset(Dataset):
             self.dataset_inter = pickle.load(f)
         self.target_sentences_path = self.load_target_sentences_path()
         self.source_sentences_path = self.load_source_sentences_path()
+        with open('words_set.pkl', 'rb') as f:
+            self.words_set = pickle.load(f)
+        self.lemmatizer = WordNetLemmatizer()
 
     def load_target_sentences_path(self):
         target_sentences = []
@@ -215,21 +220,8 @@ class TargetDataset(Dataset):
         return target_sentences
 
     def load_source_sentences_path(self):
-        source_sentences = []
-
-        # Get sorted list of all courses (excluding any files)
-        dirlist = []
-        for fname in os.listdir(self.courses_dir):
-            if os.path.isdir(os.path.join(self.courses_dir, fname)):
-                dirlist.append(fname)
-        
-        for course_number in sorted(dirlist, key=int):
-            source_path = os.path.join(self.courses_dir, course_number, 'transcripts/')
-            source_sentence_path = [source_path + transcript_path for transcript_path in sorted([item for item in os.listdir(source_path) if os.path.isfile(os.path.join(source_path, item)) and '.txt' in item and '{}/{}'.format(course_number, item[:-4]) in self.dataset_inter], key=self.get_num)]
-
-            source_sentences.extend(source_sentence_path)
-
-        return source_sentences
+        text_dataset = TextDataset(self.courses_dir)
+        return text_dataset.text_embedding_paths
 
     def get_num(self, str):
         return int(re.search(r'\d+', str).group())
@@ -240,18 +232,11 @@ class TargetDataset(Dataset):
     def __getitem__(self, idx):
         lines = []
         try:
-            with open(self.source_sentences_path[idx]) as f:
-                for line in f:
-                    if re.match(r'\d+:\d+', line) is None:
-                        line = line.replace('[MUSIC]', '')
-                        lines.append(line.strip())
+            emb = torch.load(self.source_sentences_path[idx])
         except Exception as e:
             logging.error('Unable to open file. Exception: ' + str(e))
         else:
-            source_text = ' '.join(lines)
-        
-        source_text = source_text.lower()
-        source_sentences = sent_tokenize(source_text)
+            source_sentences = emb.keys()
 
         lines = []
         try:
@@ -267,11 +252,18 @@ class TargetDataset(Dataset):
 
         # target_text = target_text.lower()
         target_sentences = sent_tokenize(target_text)
+        stop_words = stopwords.words('english')
+        tweet_tokenizer = TweetTokenizer()
+        target_sentences_processed = []
         for idx2 in range(len(target_sentences)):
             target_sentences[idx2] = target_sentences[idx2].lower()
+            words = tweet_tokenizer.tokenize(target_sentences[idx2])
+            sent = [word for word in words if word not in stop_words]
+            if not self.is_blank_sentence(sent): # Ignore blank sentences
+                target_sentences_processed.append(' '.join(sent))
 
         target_indices = []
-        for target_sentence in target_sentences:
+        for tidx, target_sentence in enumerate(target_sentences_processed):
             # target_indices.append(torch.Tensor([source_sentences.index(target_sentence)]))
             try:
                 target_indices.append(torch.Tensor([self.get_index(source_sentences, target_sentence)]))
@@ -279,7 +271,11 @@ class TargetDataset(Dataset):
                 if False:
                     print("Exception: " + str(e))
                     print(self.target_sentences_path[idx])
+                    print(target_sentences)
+                    print('\n--------------------')
                     print(target_sentence)
+                    print('\n--------------------')
+                    print(target_sentences[tidx])
                     print('\n\n--------------------\n\n')
                     print(source_sentences)
                     print('\n-----------------------\n')
@@ -292,6 +288,12 @@ class TargetDataset(Dataset):
         for idx, sent in enumerate(source_sentences):
             if target_sentence in sent:
                 return idx
+
+    def is_blank_sentence(self, sentence):
+        for token in sentence:
+            if self.lemmatizer.lemmatize(token) in self.words_set:
+                return False
+        return True
 
 def collator(DataLoaderBatch):
     items = [item[0] for item in DataLoaderBatch]
