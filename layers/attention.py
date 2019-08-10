@@ -159,15 +159,21 @@ class MultimodalAttentionDecoder(nn.Module):
         # e3 = self.v3(self.tanh(self.W5(c1) + self.W2(c2)))      # (batch, 1)
         # c3 = e3 * c1 + e3 * c2              # (batch, 2 * hidden_size)
         e_beta_1 = self.v_beta_1(self.tanh(self.W_beta_1(c1.unsqueeze(1)) + self.W_beta_2(decoder_hidden)))  # (batch, num_dir*num_layers, 1)
-        beta_1 = e_beta_1 * c1          # (batch, num_dir*num_layers, 2 * hidden_size)
-        beta_1 = torch.sum(beta_1, dim=1)       # (batch, 2 * hidden_size)
-
         e_beta_2 = self.v_beta_2(self.tanh(self.W_beta_3(c2.unsqueeze(1)) + self.W_beta_4(decoder_hidden)))  # (batch, num_dir*num_layers, 1)
-        beta_2 = e_beta_2 * c2          # (batch, num_layers*num_dir, 2 * hidden_size)
-        beta_2 = torch.sum(beta_2, dim=1)   # (batch, 2 * hidden_size)
+        e_beta = torch.cat((e_beta_1, e_beta_2), dim=1)         # (batch, 2, 1)
+        att_beta = F.softmax(e_beta, dim=1)                     # (batch, 2, 1)
+        c3 = torch.stack((c1, c2), dim=1) * att_beta            # (batch, 2, 2 * hidden_size)
+        c3 = torch.sum(c3, dim=1)                               # (batch, 2 * hidden_size)
+        att_cov_dist = torch.bmm(torch.cat((att_weights_1, att_weights_2), dim=2), att_beta)            # (batch, max_seq_len, 1)
+        # beta_1 = e_beta_1 * c1          # (batch, num_dir*num_layers, 2 * hidden_size)
+        # beta_1 = torch.sum(beta_1, dim=1)       # (batch, 2 * hidden_size)
 
-        c3 = beta_1*c1 + beta_2*c2            # (batch, 2 * hidden_size)
-        att_cov_dist = e_beta_1*att_weights_1 + e_beta_2*att_weights_2          # (batch, max_seq_len, 1)
+        # e_beta_2 = self.v_beta_2(self.tanh(self.W_beta_3(c2.unsqueeze(1)) + self.W_beta_4(decoder_hidden)))  # (batch, num_dir*num_layers, 1)
+        # beta_2 = e_beta_2 * c2          # (batch, num_layers*num_dir, 2 * hidden_size)
+        # beta_2 = torch.sum(beta_2, dim=1)   # (batch, 2 * hidden_size)
+
+        # c3 = beta_1*c1 + beta_2*c2            # (batch, 2 * hidden_size)
+        # att_cov_dist = e_beta_1*att_weights_1 + e_beta_2*att_weights_2          # (batch, max_seq_len, 1)
         coverage_vec = coverage_vec + att_cov_dist          # (batch, max_seq_len, 1)
         
         cat_input = torch.cat((c3.unsqueeze(1), sent_embed), dim=2)        # (batch, 1, 2*hidden_size + text_embedding_size)
