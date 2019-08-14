@@ -153,7 +153,7 @@ class MMBiDAF(nn.Module):
         decoder_input = decoder_input.to(self.device)
         coverage_vec = coverage_vec.to(self.device)
 
-        eps = 1e-8
+        eps = 1e-12
         loss = 0
         cov_loss_wt = 1.0
         out_distributions = []
@@ -166,17 +166,17 @@ class MMBiDAF(nn.Module):
                 for batch_idx in range(batch_target_indices.size(0)):
                     # Loss calculation
                     prob = out_distribution[batch_idx, int(batch_target_indices[batch_idx, idx])]
-                    print("Prob = {}".format(prob))
-                    loss += -1 * torch.log(prob + eps)
-                    print("Loss = {}".format(loss))
+                    # print("Prob = {}".format(prob))
+                    loss = loss + (-1 * torch.log(prob + eps))
+                    # print("Loss = {}".format(loss))
 
                     decoder_input.append(embedded_text[batch_idx, int(batch_target_indices[batch_idx, idx])].unsqueeze(0))         # (1, embedding_size)
                 decoder_input = torch.stack(decoder_input)              # (batch_size, 1, embedding_size)
                 out_distributions.append(out_distribution)              # (max_timesteps, batch_size, total_max_len)
 
-            coverage_loss = torch.sum(torch.min(att_cov_dist, coverage_vec))      # 1D tensor
-            loss += cov_loss_wt * coverage_loss                         # adding the coverage loss to the model loss
-            loss /= batch_target_indices.size(1)                        # average loss for all the timesteps
+                coverage_loss = torch.sum(torch.min(att_cov_dist, coverage_vec))      # 1D tensor
+                loss = loss + cov_loss_wt * coverage_loss                         # adding the coverage loss to the model loss
+            loss = loss / batch_target_indices.size(1)                        # average loss for all the timesteps
 
         else:           # Evaluation time of the decoder
             for idx in range(max_dec_len):           
@@ -186,17 +186,17 @@ class MMBiDAF(nn.Module):
                 for batch_idx in range(text_emb.size(0)):
                     # Loss calculation
                     prob = out_distribution[batch_idx, int(batch_target_indices[batch_idx, idx])]
-                    print("Prob = {}".format(prob))
-                    loss += -1 * torch.log(prob + eps)
-                    print("Loss = {}".format(loss))
+                    # print("Prob = {}".format(prob))
+                    loss = loss + (-1 * torch.log(prob + eps))
+                    # print("Loss = {}".format(loss))
 
                     decoder_input.append(embedded_text[batch_idx, int(max_prob_idx[batch_idx])].unsqueeze(0))         # (1, embedding_size)
                 decoder_input = torch.stack(decoder_input)              # (batch_size, 1, embedding_size)
                 out_distributions.append(out_distribution)              # (max_timesteps, batch_size, total_max_len)
             
             coverage_loss = torch.sum(torch.min(att_cov_dist, coverage_vec))      # 1D tensor
-            loss += cov_loss_wt * coverage_loss                         # adding the coverage loss to the model loss
-            loss /= max_dec_len                                         # average loss for all the timesteps
+            loss = loss + cov_loss_wt * coverage_loss                         # adding the coverage loss to the model loss
+            loss = loss /  max_dec_len                                         # average loss for all the timesteps
 
         # print(out_distributions.size())
         # sys.exit()              # Debugging purpose
