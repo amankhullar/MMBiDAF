@@ -38,7 +38,7 @@ def get_test_indices():
         test_indices = pickle.load(f)
     return test_indices
 
-def evaluate(courses_dir, hidden_size, text_embedding_size, audio_embedding_size, image_embedding_size, drop_prob, max_text_length, args, checkpoint_path, batch_size=3):
+def evaluate(courses_dir, hidden_size, text_embedding_size, audio_embedding_size, image_embedding_size, drop_prob, max_text_length, args, checkpoint_path, batch_size=1):
     # Set up logging and devices
     args.save_dir = util.get_save_dir(args.save_dir, args.name, training=False)
     log = util.get_logger(args.save_dir, args.name)
@@ -58,7 +58,7 @@ def evaluate(courses_dir, hidden_size, text_embedding_size, audio_embedding_size
 
     # model = load_model(model, checkpoint_path, args.gpu_ids)
     print("Model Loaded")
-    print(model)
+#     print(model)
 
     # Create Dataset objects
     text_dataset = TextDataset(courses_dir, max_text_length)
@@ -114,7 +114,12 @@ def evaluate(courses_dir, hidden_size, text_embedding_size, audio_embedding_size
             print('Generated summary for batch {}: '.format(batch_idx))
 
             ###### FOR TESTING ##########
-            batch_source_paths = batch_source_paths.replace('sentence_features3', 'transcripts').replace('.pt', '.txt')
+#             print(batch_source_paths)
+#             print(type(batch_source_paths))
+            batch_source_paths = list(batch_source_paths)
+            for idx in range(len(batch_source_paths)):
+                batch_source_paths[idx] = batch_source_paths[idx].replace('sentence_features3', 'transcripts').replace('.pt', '.txt')
+#             print(batch_source_paths)
             summaries, gen_idxs = get_generated_summaries(batch_out_distributions, original_text_lengths, batch_source_paths) # (batch_size, beam_size, sents)
             print(summaries)     
             
@@ -136,7 +141,7 @@ def evaluate(courses_dir, hidden_size, text_embedding_size, audio_embedding_size
         print("Average Rouge score on the data is : {}".format(total_scores))
         print("Average F1 score on the data is : {}".format(f1_scores))
 
-def get_generated_summaries(batch_out_distributions, original_text_lengths, batch_source_paths, method='beam', k=5):
+def get_generated_summaries(batch_out_distributions, original_text_lengths, batch_source_paths, method='greedy', k=5):
     batch_out_distributions = np.array([dist.cpu().detach().numpy() for dist in batch_out_distributions])
     generated_summaries = []
     gen_idxs = []
@@ -160,9 +165,14 @@ def greedy_search(out_distributions, original_text_length, source_path):
     for probs in out_distributions: # Looping over timesteps
         if(probs[int(original_text_length)] == np.argmax(probs)): # EOS
             break
+        print("length of original text length is : {}".format(original_text_length))
         max_prob_idx = np.argmax(probs, 0)
-        generated_summary.append(get_source_sentence(source_path, max_prob_idx))
-        gen_idxs.append(max_prob_idx)
+        sent = get_source_sentence(source_path, max_prob_idx)
+        if sent == 0:
+            break
+        elif sent != None:
+            generated_summary.append(sent)
+            gen_idxs.append(max_prob_idx)
         # Setting the generated sentence's prob to zero in the remaining timesteps - coverage?
         # out_distributions[:, max_prob_idx] = 0
     return generated_summary, gen_idxs
@@ -202,7 +212,7 @@ def beam_search(out_distributions, original_text_length, source_path, k=5):
 def get_source_sentence(source_path, idx):
     lines = []
     try:
-        with open(source_path) as f:
+        with open(source_path, 'r') as f:
             for line in f:
                     if re.match(r'\d+:\d+', line) is None:
                         line = line.replace('[MUSIC]', '')
@@ -210,16 +220,22 @@ def get_source_sentence(source_path, idx):
     except Exception as e:
         logging.error('Unable to open file. Exception: ' + str(e))
     else:
+        print("Idx is  : {}".format(idx))
         source_text = ' '.join(lines)
         source_sentences = sent_tokenize(source_text)
+        print("length of source sentences is : {}".format(len(source_sentences)))
         for i in range(len(source_sentences)):
             source_sentences[i] = source_sentences[i].lower()
+        if idx == len(source_sentences):
+            return 0
+        if idx > len(source_sentences):
+            return None
         return source_sentences[idx]
 
 def prepare(gt, res):
-    clean_gt = [" ".join([stemmer.stem(i) for i in line.split()]) for line in gt]
-    clean_res = [" ".join([stemmer.stem(i) for i in line.split()]) for line in res]
-    return clean_gt, clean_res
+#     clean_gt = [" ".join([stemmer.stem(i) for i in line.split()]) for line in gt]
+#     clean_res = [" ".join([stemmer.stem(i) for i in line.split()]) for line in res]
+    return gt, res
 
 def get_rouge(clean_gt, clean_res):
     rouge = Rouge()
@@ -232,10 +248,18 @@ def compute_rouge(summaries, batch_target_paths, beam_size=1):
     batch_count = len(summaries)
     for batch_idx, batch_val in enumerate(summaries):
         try:
+            gt_data = []
             with open(batch_target_paths[batch_idx], 'r') as f:
-                gt_data = f.readlines()
+                for line in f:
+                    if re.match(r'\d+:\d+', line) is None:
+                        line = line.replace('[MUSIC]', '')
+                        line = line.lower()
+                        gt_data.append(line.strip())
         except Exception as e:
-            print("Cannot open files with error : "+ e)
+            print("Cannot open files with error : "+ str(e))
+#         print("Generated summary is : {}".format(summaries))
+#         print("Ground truth is : {}".format(gt_data))
+        summaries = [item for sublist in summaries for item in sublist]
         res_data = batch_val[beam_size-1]
         min_len = min(len(gt_data), len(res_data))
         gt_data = gt_data[:min_len]
@@ -279,4 +303,3 @@ if __name__ == "__main__":
     checkpoint_path = "/home/amankhullar/model/multimodal_bidaf/save/train/temp-21/step_67900.pth.tar"
     courses_dir = '/home/anish17281/NLP_Dataset/dataset/'
     evaluate(courses_dir, hidden_size, text_embedding_size, audio_embedding_size, image_embedding_size, drop_prob, max_text_length, args, checkpoint_path)
-
