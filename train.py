@@ -129,8 +129,6 @@ def main(course_dir, text_embedding_size, audio_embedding_size, image_embedding_
     optimizer = optim.Adadelta(model.parameters(), args.lr, weight_decay=args.l2_wd)
     scheduler = sched.LambdaLR(optimizer, lambda s: 1.)  # Constant LR
 
-    # TODO : Add the dev and the test dataset loaders
-
     # Let's do this!
     loss = 0
     eps = 1e-8
@@ -141,6 +139,8 @@ def main(course_dir, text_embedding_size, audio_embedding_size, image_embedding_
     while epoch != args.num_epochs:
         epoch += 1
         log.info("Starting epoch {epoch}...")
+        count_item = 0
+        loss_epoch = 0
         with torch.enable_grad(), tqdm(total=len(train_text_loader.dataset)) as progress_bar:
             for (batch_text, original_text_lengths), (batch_audio, original_audio_lengths), (batch_images, original_img_lengths), (batch_target_indices, batch_source_paths, batch_target_paths, original_target_len) in zip(train_text_loader, train_audio_loader, train_image_loader, train_target_loader):
                 loss = 0
@@ -164,6 +164,7 @@ def main(course_dir, text_embedding_size, audio_embedding_size, image_embedding_
                 # Forward
                 batch_out_distributions, loss = model(batch_text, original_text_lengths, batch_audio, original_audio_lengths, batch_images, original_img_lengths, batch_target_indices, original_target_len, max_dec_len)
                 loss_val = loss.item()           # numerical value of loss
+                loss_epoch = loss_epoch + loss_val
                 
                 log.info("Starting backward")
 
@@ -184,9 +185,6 @@ def main(course_dir, text_embedding_size, audio_embedding_size, image_embedding_
                                optimizer.param_groups[0]['lr'],
                                step)
                 
-                print("Reached here")
-                sys.exit()
-
                 steps_till_eval -= batch_size
                 if steps_till_eval <= 0:
                     steps_till_eval = args.eval_steps
@@ -195,11 +193,11 @@ def main(course_dir, text_embedding_size, audio_embedding_size, image_embedding_
                     log.info(f'Evaluating at step {step}...')
                     ema.assign(model)
                     # TODO
-                    scores, results = evaluate(model, dev_loader, device,
-                                                  args.dev_eval_file,
-                                                  args.max_ans_len,
-                                                  args.use_squad_v2)
-                    saver.save(step, model, results[args.metric_name], device)
+                    # scores, results = evaluate(model, dev_loader, device,
+                    #                               args.dev_eval_file,
+                    #                               args.max_ans_len,
+                    #                               args.use_squad_v2)
+                    saver.save(step, model, device)
                     ema.resume(model)
 
                 # Generate summary
@@ -220,6 +218,7 @@ def main(course_dir, text_embedding_size, audio_embedding_size, image_embedding_
                 # ax = sns.heatmap(out_distributions)
                 # fig = ax.get_figure()
                 # fig.savefig(out_heatmaps_dir + str(epoch) + '.png')
+            print("Epoch loss is : {}".format(loss_epoch/count_item))
 
 if __name__ == '__main__':
     course_dir = '/home/anish17281/NLP_Dataset/dataset/'
@@ -228,9 +227,9 @@ if __name__ == '__main__':
     image_embedding_size = 1000
     hidden_size = 100
     drop_prob = 0.2
-    max_text_length = 405
-    num_epochs = 100
-    batch_size = 3
+    max_text_length = 409
+    num_epochs = 90
+    batch_size = 1
     out_heatmaps_dir = '/home/amankhullar/model/output_heatmaps/'
     args = get_train_args()
     main(course_dir, text_embedding_size, audio_embedding_size, image_embedding_size, hidden_size, drop_prob, max_text_length, out_heatmaps_dir, args, batch_size, num_epochs)

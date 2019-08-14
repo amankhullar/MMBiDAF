@@ -9,7 +9,7 @@ def get_train_args():
 
     parser.add_argument('--eval_steps',
                         type=int,
-                        default=50000,
+                        default=700,
                         help='Number of steps between successive evaluations.')
     parser.add_argument('--lr',
                         type=float,
@@ -21,7 +21,7 @@ def get_train_args():
                         help='L2 weight decay.')
     parser.add_argument('--num_epochs',
                         type=int,
-                        default=30,
+                        default=90,
                         help='Number of epochs for which to train. Negative means forever.')
     parser.add_argument('--drop_prob',
                         type=float,
@@ -38,7 +38,7 @@ def get_train_args():
                         help='Maximum number of checkpoints to keep on disk.')
     parser.add_argument('--max_grad_norm',
                         type=float,
-                        default=5.0,
+                        default=2.0,
                         help='Maximum gradient norm for gradient clipping.')
     parser.add_argument('--seed',
                         type=int,

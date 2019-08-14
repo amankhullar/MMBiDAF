@@ -248,7 +248,7 @@ class CheckpointSaver:
         if self.log is not None:
             self.log.info(message)
 
-    def save(self, step, model, metric_val, device):
+    def save(self, step, model, device, metric_val=0):
         """Save model parameters to disk.
         Args:
             step (int): Total number of examples seen during training so far.
@@ -268,28 +268,28 @@ class CheckpointSaver:
         torch.save(ckpt_dict, checkpoint_path)
         self._print(f'Saved checkpoint: {checkpoint_path}')
 
-        if self.is_best(metric_val):
-            # Save the best model
-            self.best_val = metric_val
-            best_path = os.path.join(self.save_dir, 'best.pth.tar')
-            shutil.copy(checkpoint_path, best_path)
-            self._print(f'New best checkpoint at step {step}...')
+        # if self.is_best(metric_val):
+        #     # Save the best model
+        #     self.best_val = metric_val
+        #     best_path = os.path.join(self.save_dir, 'best.pth.tar')
+        #     shutil.copy(checkpoint_path, best_path)
+        #     self._print(f'New best checkpoint at step {step}...')
 
-        # Add checkpoint path to priority queue (lowest priority removed first)
-        if self.maximize_metric:
-            priority_order = metric_val
-        else:
-            priority_order = -metric_val
+        # # Add checkpoint path to priority queue (lowest priority removed first)
+        # if self.maximize_metric:
+        #     priority_order = metric_val
+        # else:
+        #     priority_order = -metric_val
 
-        self.ckpt_paths.put((priority_order, checkpoint_path))
+        # self.ckpt_paths.put((priority_order, checkpoint_path))
 
-        # Remove a checkpoint if more than max_checkpoints have been saved
-        if self.ckpt_paths.qsize() > self.max_checkpoints:
-            _, worst_ckpt = self.ckpt_paths.get()
-            try:
-                os.remove(worst_ckpt)
-                self._print(f'Removed checkpoint: {worst_ckpt}')
-            except OSError:
-                # Avoid crashing if checkpoint has been removed or protected
-                pass
+        # # Remove a checkpoint if more than max_checkpoints have been saved
+        # if self.ckpt_paths.qsize() > self.max_checkpoints:
+        #     _, worst_ckpt = self.ckpt_paths.get()
+        #     try:
+        #         os.remove(worst_ckpt)
+        #         self._print(f'Removed checkpoint: {worst_ckpt}')
+        #     except OSError:
+        #         # Avoid crashing if checkpoint has been removed or protected
+        #         pass
                 
