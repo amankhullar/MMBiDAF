@@ -44,6 +44,8 @@ def evaluate(courses_dir, hidden_size, text_embedding_size, audio_embedding_size
     log = util.get_logger(args.save_dir, args.name)
     log.info(f'Args: {dumps(vars(args), indent=4, sort_keys=True)}')
     device, gpu_ids = util.get_available_devices()
+#     device = torch.device('cpu')    #### TODO : only because GPU is out of memory
+#     gpu_ids = []    #### TODO : Gpu out of memory
     args.batch_size *= max(1, len(gpu_ids))
 
     model = MMBiDAF(hidden_size, text_embedding_size, audio_embedding_size, image_embedding_size, device, drop_prob, max_text_length)
@@ -119,7 +121,7 @@ def evaluate(courses_dir, hidden_size, text_embedding_size, audio_embedding_size
 #             print(type(batch_source_paths))
             batch_source_paths = list(batch_source_paths)
             for idx in range(len(batch_source_paths)):
-                batch_source_paths[idx] = batch_source_paths[idx].replace('sentence_features3', 'transcripts').replace('.pt', '.txt')
+                batch_source_paths[idx] = batch_source_paths[idx].replace('sentence_features3', 'processed_transcripts').replace('.pt', '.p')
 #             print(batch_source_paths)
             summaries, gen_idxs = get_generated_summaries(batch_out_distributions, original_text_lengths, batch_source_paths) # (batch_size, beam_size, sents)
 
@@ -222,24 +224,26 @@ def beam_search(out_distributions, original_text_length, source_path, k=5):
 def get_source_sentence(source_path, idx):
     lines = []
     try:
-        with open(source_path, 'r') as f:
-            for line in f:
-                    if re.match(r'\d+:\d+', line) is None:
-                        line = line.replace('[MUSIC]', '')
-                        lines.append(line.strip())
+        with open(source_path, 'rb') as f:
+#             for line in f:
+#                     if re.match(r'\d+:\d+', line) is None:
+#                         line = line.replace('[MUSIC]', '')
+#                         lines.append(line.strip())
+            source_file = pickle.load(f)
     except Exception as e:
         logging.error('Unable to open file. Exception: ' + str(e))
     else:
         # print("Idx is  : {}".format(idx))
-        source_text = ' '.join(lines)
-        source_sentences = sent_tokenize(source_text)
+#         source_text = ' '.join(lines)
+#         source_sentences = sent_tokenize(source_text)
         # print("length of source sentences is : {}".format(len(source_sentences)))
-        for i in range(len(source_sentences)):
-            source_sentences[i] = source_sentences[i].lower()
-        # if idx == len(source_sentences):
-        #     return 0
-        # if idx > len(source_sentences):
-        #     return None
+        source_sentences = [sent[0] for sent in source_file]
+#         for i in range(len(source_sentences)):
+#             source_sentences[i] = source_sentences[i].lower()
+        if idx == len(source_sentences):
+            return 0
+        if idx > len(source_sentences):
+            return None
         return source_sentences[idx]
 
 def prepare(gt, res):

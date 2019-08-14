@@ -1,3 +1,5 @@
+import os
+import pickle
 import re
 from gensim.scripts.glove2word2vec import glove2word2vec
 from gensim.models import KeyedVectors
@@ -44,7 +46,7 @@ def is_blank_sentence(sentence, words_set, lemmatizer):
     print("Found blank sentence!: " + str(sentence))
     return True
 
-def generate_embeddings(path, glove_path, sentence_path, words_set, model, lemmatizer):
+def generate_embeddings(path, glove_path, sentence_path, words_set, model, lemmatizer, save_trans_path):
     files = [os.path.join(path, item) for item in os.listdir(path) if os.path.isfile(os.path.join(path, item)) and '.txt' in item]
     for file in files:
         # if '21.txt' not in file:
@@ -66,21 +68,27 @@ def generate_embeddings(path, glove_path, sentence_path, words_set, model, lemma
             doc = preprocess(text, stop_words)
             
             embedding_matrix = {}
-            for sentence in doc:
+            idx = os.path.basename(file)[:-4]
+            sents = []
+            for sentence, line in zip(doc, lines):
                 if is_blank_sentence(sentence, words_set, lemmatizer):
                     continue
-                single_sentence_embed = document_vector(model, sentence)
+#                 single_sentence_embed = document_vector(model, sentence)
     #             x.append(single_sentence_embed)
-                sentence_embeddings = np.array(single_sentence_embed)
-                sentence_embeddings = torch.from_numpy(sentence_embeddings)
-                sentence_list = " ".join(sentence)
-                embedding_matrix[sentence_list] = sentence_embeddings
+                sents.append((' '.join(sentence), line))
+        
+#                 sentence_embeddings = np.array(single_sentence_embed)
+#                 sentence_embeddings = torch.from_numpy(sentence_embeddings)
+#                 sentence_list = " ".join(sentence)
+#                 embedding_matrix[sentence_list] = sentence_embeddings
+            with open(save_trans_path + str(idx) + '.p', 'wb') as f:
+                pickle.dump(sents, f)
             
             # Save the embedding dictionary for faster loading
-            idx = os.path.basename(file)[:-4]
-            save_path = sentence_path + str(idx) + '.pt'
-            torch.save(embedding_matrix, save_path)
-            print("Saved " + str(save_path))
+#             idx = os.path.basename(file)[:-4]
+#             save_path = sentence_path + str(idx) + '.pt'
+#             torch.save(embedding_matrix, save_path)
+#             print("Saved " + str(save_path))
         
 def download_data():
     """
@@ -95,13 +103,15 @@ def main(base_path, glove_path, words_set, model, lemmatizer):
     for idx in range(start_idx, end_idx):
         print("Processing course " + str(idx))
         transcript_path = base_path + str(idx) + "/" + "transcripts/"
-        sentence_path = base_path + str(idx) + '/' + 'sentence_features3/'
+        sentence_path = base_path + str(idx) + '/' + 'sentence_features4/'
+        save_path = base_path + str(idx) + '/' + 'processed_transcripts/'
         os.system('mkdir ' + sentence_path)
-        generate_embeddings(transcript_path, glove_path, sentence_path, words_set, model, lemmatizer)
+        os.system('mkdir ' + save_path)
+        generate_embeddings(transcript_path, glove_path, sentence_path, words_set, model, lemmatizer, save_path)
 
 if __name__ == "__main__":
     base_path = '/home/anish17281/NLP_Dataset/dataset/'
-    glove_path = '/home/udita/multimodal/glove_data/glove.6B.300d.txt'
+    glove_path = '/home/amankhullar/glove_data/glove.6B.300d.txt'
     model = get_model(glove_path)
     words_set = model.vocab
     lemmatizer = WordNetLemmatizer()
