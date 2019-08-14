@@ -89,6 +89,7 @@ def evaluate(courses_dir, hidden_size, text_embedding_size, audio_embedding_size
 
     batch_idx = 0
     total_scores = [0]*9        # in order of 'p' 'r' and 'f' for r1, r2, rl
+    f1_score = 0
     with torch.no_grad():
         for (batch_text, original_text_lengths), (batch_audio, original_audio_lengths), (batch_images, original_img_lengths), \
             (batch_target_indices, batch_source_paths, batch_target_paths, original_target_len) \
@@ -99,19 +100,19 @@ def evaluate(courses_dir, hidden_size, text_embedding_size, audio_embedding_size
 
             # Transfer tensors to GPU
             batch_text = batch_text.to(device)
-            log.info("Loaded batch text")
+            # log.info("Loaded batch text")
             batch_audio = batch_audio.to(device)
-            log.info("Loaded batch audio")
+            # log.info("Loaded batch audio")
             batch_images = batch_images.to(device)
-            log.info("Loaded batch image")
+            # log.info("Loaded batch image")
             batch_target_indices = batch_target_indices.to(device)
-            log.info("Loaded batch targets")
+            # log.info("Loaded batch targets")
 
             batch_out_distributions, _ = model(batch_text, original_text_lengths, batch_audio, original_audio_lengths, \
                                             batch_images, original_img_lengths, batch_target_indices, original_target_len, max_dec_len)
 
             # Generate summary for current batch
-            print('Generated summary for batch {}: '.format(batch_idx))
+            log.info("\n\nGenerating summaries for batch {}\n".format(batch_idx))
 
             ###### FOR TESTING ##########
 #             print(batch_source_paths)
@@ -121,25 +122,33 @@ def evaluate(courses_dir, hidden_size, text_embedding_size, audio_embedding_size
                 batch_source_paths[idx] = batch_source_paths[idx].replace('sentence_features3', 'transcripts').replace('.pt', '.txt')
 #             print(batch_source_paths)
             summaries, gen_idxs = get_generated_summaries(batch_out_distributions, original_text_lengths, batch_source_paths) # (batch_size, beam_size, sents)
-            print(summaries)     
-            
-            # Calculate Rouge score for the current batch
-            all_scrores = compute_rouge(summaries, batch_target_paths, beam_size=1) # tuple of all scores
-            for idx, score in enumerate(all_scrores):
-                total_scores[idx] += score
 
-            # Calculate F1 score for the current batch
-            f1_scores = compute_f1(gen_idxs, batch_target_indices, beam_size=1)
-        
+            print('Generated summaries for batch {}: '.format(batch_idx))
+            print(summaries)
+
+            try:
+                # Calculate Rouge score for the current batch
+                all_scrores = compute_rouge(summaries, batch_target_paths, beam_size=1) # tuple of all scores
+                for idx, score in enumerate(all_scrores):
+                    total_scores[idx] += score
+
+                # Calculate F1 score for the current batch
+                curr_f1_score = compute_f1(gen_idxs, batch_target_indices, beam_size=1)
+                print("F1 score: {}".format(curr_f1_score))
+                f1_score += curr_f1_score
+            except Exception as e:
+                print("Error: " + str(e))
+                continue
+
         # Average Rouge score across batches
         for idx in range(len(total_scores)):                
             total_scores[idx] /= batch_idx
-        
+
         #Average F1 score
-        f1_scores /= batch_idx
+        f1_score /= batch_idx
 
         print("Average Rouge score on the data is : {}".format(total_scores))
-        print("Average F1 score on the data is : {}".format(f1_scores))
+        print("Average F1 score on the data is : {}".format(f1_score))
 
 def get_generated_summaries(batch_out_distributions, original_text_lengths, batch_source_paths, method='greedy', k=5):
     batch_out_distributions = np.array([dist.cpu().detach().numpy() for dist in batch_out_distributions])
@@ -163,10 +172,11 @@ def greedy_search(out_distributions, original_text_length, source_path):
     generated_summary = []
     gen_idxs = []
     for probs in out_distributions: # Looping over timesteps
-        if(probs[int(original_text_length)] == np.argmax(probs)): # EOS
+        if(original_text_length - 1 == np.argmax(probs)): # EOS
             break
-        print("length of original text length is : {}".format(original_text_length))
+        # print("Length of original text is : {}".format(original_text_length - 1))
         max_prob_idx = np.argmax(probs, 0)
+        # print("Max_prob_idx = " + str(max_prob_idx))
         sent = get_source_sentence(source_path, max_prob_idx)
         if sent == 0:
             break
@@ -220,16 +230,16 @@ def get_source_sentence(source_path, idx):
     except Exception as e:
         logging.error('Unable to open file. Exception: ' + str(e))
     else:
-        print("Idx is  : {}".format(idx))
+        # print("Idx is  : {}".format(idx))
         source_text = ' '.join(lines)
         source_sentences = sent_tokenize(source_text)
-        print("length of source sentences is : {}".format(len(source_sentences)))
+        # print("length of source sentences is : {}".format(len(source_sentences)))
         for i in range(len(source_sentences)):
             source_sentences[i] = source_sentences[i].lower()
-        if idx == len(source_sentences):
-            return 0
-        if idx > len(source_sentences):
-            return None
+        # if idx == len(source_sentences):
+        #     return 0
+        # if idx > len(source_sentences):
+        #     return None
         return source_sentences[idx]
 
 def prepare(gt, res):

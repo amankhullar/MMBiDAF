@@ -93,25 +93,25 @@ class MMBiDAF(nn.Module):
 
     def forward(self, embedded_text, original_text_lengths, embedded_audio, original_audio_lengths, transformed_images, original_image_lengths, batch_target_indices, original_target_len, max_dec_len):
         text_emb = self.emb(embedded_text)                                                          # (batch_size, num_sentences, hidden_size)
-        print("Highway Embedded text")
+        # print("Highway Embedded text")
         text_encoded, _ = self.text_enc(text_emb, original_text_lengths)                               # (batch_size, num_sentences, 2 * hidden_size)
-        print("Text encoding")
+        # print("Text encoding")
 
         audio_emb = self.a_emb(embedded_audio)                                                      # (batch_size, num_audio_envelopes, hidden_size)
-        print("Highway Embedded Audio")
+        # print("Highway Embedded Audio")
         audio_encoded, _ = self.audio_enc(audio_emb, original_audio_lengths)                           # (batch_size, num_audio_envelopes, 2 * hidden_size)
-        print("Audio encoding")
+        # print("Audio encoding")
 
         original_images_size = transformed_images.size()                                             # (batch_size, num_keyframes, num_channels, transformed_image_size, transformed_image_size)
         # Combine images across videos in a batch into a single dimension to be embedded by ResNet
         transformed_images = torch.reshape(transformed_images, (-1, transformed_images.size(2), transformed_images.size(3), transformed_images.size(4)))    # (batch_size * num_keyframes, num_channels, transformed_image_size, transformed_image_size)
         image_emb = self.image_keyframes_emb(transformed_images)                                    # (batch_size * num_keyframes, encoded_image_size=1000)
-        print("Resnet Image")
+        # print("Resnet Image")
         image_emb = torch.reshape(image_emb, (original_images_size[0], original_images_size[1], -1))  # (batch_size, num_keyframes, 300)
         image_emb = self.i_emb(image_emb)                                                             # (batch_size, num_keyframes, hidden_size)
-        print("Highway Image")
+        # print("Highway Image")
         image_encoded, _ = self.image_enc(image_emb, original_image_lengths)                           # (batch_size, num_keyframes, 2 * hidden_size)
-        print("Image Encoding")
+        # print("Image Encoding")
 
         text_mask = self.get_mask(embedded_text, original_text_lengths)
         audio_mask = self.get_mask(embedded_audio, original_audio_lengths)
