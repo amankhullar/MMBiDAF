@@ -1,4 +1,5 @@
 import os
+import re
 import sys
 import numpy as np
 
@@ -94,7 +95,7 @@ def evaluate(courses_dir, hidden_size, text_embedding_size, audio_embedding_size
             in zip(test_text_loader, test_audio_loader, test_image_loader, test_target_loader):
             batch_idx += 1
 
-            max_dec_len = torch.max(original_target_len)             # TODO check error : max decoder timesteps for each batch 
+            max_dec_len = max(original_target_len)             # TODO check error : max decoder timesteps for each batch 
 
             # Transfer tensors to GPU
             batch_text = batch_text.to(device)
@@ -111,16 +112,19 @@ def evaluate(courses_dir, hidden_size, text_embedding_size, audio_embedding_size
 
             # Generate summary for current batch
             print('Generated summary for batch {}: '.format(batch_idx))
+
+            ###### FOR TESTING ##########
+            batch_source_paths = batch_source_paths.replace('sentence_features3', 'transcripts').replace('.pt', '.txt')
             summaries, gen_idxs = get_generated_summaries(batch_out_distributions, original_text_lengths, batch_source_paths) # (batch_size, beam_size, sents)
             print(summaries)     
             
             # Calculate Rouge score for the current batch
-            all_scrores = compute_rouge(summaries, batch_target_paths, beam_size=5) # tuple of all scores
+            all_scrores = compute_rouge(summaries, batch_target_paths, beam_size=1) # tuple of all scores
             for idx, score in enumerate(all_scrores):
                 total_scores[idx] += score
 
             # Calculate F1 score for the current batch
-            f1_scores = compute_f1(gen_idxs, batch_target_indices, beam_size=5)
+            f1_scores = compute_f1(gen_idxs, batch_target_indices, beam_size=1)
         
         # Average Rouge score across batches
         for idx in range(len(total_scores)):                
@@ -222,7 +226,7 @@ def get_rouge(clean_gt, clean_res):
     scores = rouge.get_scores(clean_res, clean_gt, avg=True)
     return scores
 
-def compute_rouge(summaries, batch_target_paths, beam_size):
+def compute_rouge(summaries, batch_target_paths, beam_size=1):
     total_score_r1p = total_score_r1r = total_score_r1f = total_score_r2p = \
     total_score_r2r = total_score_r2f = total_score_rlp = total_score_rlr = total_score_rlf = 0
     batch_count = len(summaries)
@@ -238,21 +242,21 @@ def compute_rouge(summaries, batch_target_paths, beam_size):
         res_data = res_data[:min_len]
         clean_gt, clean_res = prepare(gt_data, res_data)
         score = get_rouge(clean_gt, clean_res)
-        score_r1p += score['rouge-1']['p']
-        score_r1r += score['rouge-1']['r']
-        score_r1f += score['rouge-1']['f']
-        score_r2p += score['rouge-2']['p']
-        score_r2r += score['rouge-2']['r']
-        score_r2f += score['rouge-2']['f']
-        score_rl1 += score['rouge-l']['p']
-        score_rl2 += score['rouge-l']['r']
-        score_rlf += score['rouge-l']['f']
+        total_score_r1p += score['rouge-1']['p']
+        total_score_r1r += score['rouge-1']['r']
+        total_score_r1f += score['rouge-1']['f']
+        total_score_r2p += score['rouge-2']['p']
+        total_score_r2r += score['rouge-2']['r']
+        total_score_r2f += score['rouge-2']['f']
+        total_score_rlp += score['rouge-l']['p']
+        total_score_rlr += score['rouge-l']['r']
+        total_score_rlf += score['rouge-l']['f']
     
     return (total_score_r1p/batch_count, total_score_r1r/batch_count, total_score_r1f/batch_count, \
         total_score_r2p/batch_count, total_score_r2r/batch_count, total_score_r2f/batch_count, \
         total_score_rlp/batch_count, total_score_rlr/batch_count, total_score_rlf/batch_count)
 
-def compute_f1(gen_idxs, batch_target_indices, beam_size):
+def compute_f1(gen_idxs, batch_target_indices, beam_size=1):
     f1_val = 0
     batch_count = len(gen_idxs)
     for batch_idx, batch_val in enumerate(gen_idxs):
@@ -270,9 +274,9 @@ if __name__ == "__main__":
     audio_embedding_size = 128
     image_embedding_size = 1000
     drop_prob = 0.2
-    max_text_length = 405
+    max_text_length = 409
     args = get_train_args()
-    checkpoint_path = "/home/amankhullar/model/multimodal_bidaf/save/train/temp-01/step_22800.pth.tar"
+    checkpoint_path = "/home/amankhullar/model/multimodal_bidaf/save/train/temp-21/step_67900.pth.tar"
     courses_dir = '/home/anish17281/NLP_Dataset/dataset/'
     evaluate(courses_dir, hidden_size, text_embedding_size, audio_embedding_size, image_embedding_size, drop_prob, max_text_length, args, checkpoint_path)
 
