@@ -33,27 +33,39 @@ from sklearn.metrics import f1_score
 
 stemmer = PorterStemmer()
 
-def get_test_indices():
-    with open('test_indices.pkl', 'rb') as f:
-        test_indices = pickle.load(f)
-    return test_indices
+USE_CPU = False
+
+def get_indices(dataset):
+    # return get_test_indices()
+    train_indices, _ = gen_train_val_indices(dataset)
+    return train_indices
 
 def evaluate(courses_dir, hidden_size, text_embedding_size, audio_embedding_size, image_embedding_size, drop_prob, max_text_length, args, checkpoint_path, batch_size=1):
     # Set up logging and devices
     args.save_dir = util.get_save_dir(args.save_dir, args.name, training=False)
     log = util.get_logger(args.save_dir, args.name)
     log.info(f'Args: {dumps(vars(args), indent=4, sort_keys=True)}')
+    
     device, gpu_ids = util.get_available_devices()
-#     device = torch.device('cpu')    #### TODO : only because GPU is out of memory
-#     gpu_ids = []    #### TODO : Gpu out of memory
-    args.batch_size *= max(1, len(gpu_ids))
+
+    if USE_CPU:
+        device = torch.device('cpu')    #### TODO : only because GPU is out of memory
+        gpu_ids = None    #### TODO : Gpu out of memory
+    
+    if gpu_ids is not None:
+        args.batch_size *= max(1, len(gpu_ids))
+
+    # Set random seed
+    log.info(f'Using random seed {args.seed}...')
+    np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
+    torch.cuda.manual_seed_all(args.seed)
 
     model = MMBiDAF(hidden_size, text_embedding_size, audio_embedding_size, image_embedding_size, device, drop_prob, max_text_length)
     model = nn.DataParallel(model, gpu_ids)
     
-    
     log.info(f'Loading checkpoint from {args.load_path}...')
-    model = util.load_model(model, checkpoint_path, gpu_ids, return_step=False)
+    model = util.load_model(model, checkpoint_path, device, gpu_ids, return_step=False)
     model = model.to(device)
     model.eval()
     # the loading is being performed in the train.py file as well
@@ -72,7 +84,7 @@ def evaluate(courses_dir, hidden_size, text_embedding_size, audio_embedding_size
     image_dataset = ImageDataset(courses_dir, transform)
 
     # Creating data indices for training and validation splits:
-    test_indices = get_test_indices()
+    test_indices = get_indices(text_dataset)
 
     # Creating PT data sampler and loaders:
     test_sampler = torch.utils.data.SequentialSampler(test_indices)

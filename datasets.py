@@ -307,3 +307,24 @@ def target_collator(DataLoaderBatch):
     lengths = [len(num_target_sent) for num_target_sent in items]
     padded_seq = torch.nn.utils.rnn.pad_sequence(items, batch_first=True, padding_value=0)
     return padded_seq, source_sent_paths, target_sent_paths, lengths
+
+def gen_train_val_indices(dataset, validation_split=0.1, shuffle=True):
+    # Ignore indices from test set and videos where ground-truth is missing
+    test_indices = get_test_indices()
+    with open('none_idxs.pkl', 'rb') as f:
+        none_indices = pickle.load(f)
+
+    dataset_size = len(dataset)
+    indices = [idx for idx in range(dataset_size) if idx not in test_indices and idx not in none_indices]
+    split = int(np.floor(validation_split * len(indices)))
+
+    if shuffle:
+        np.random.shuffle(indices)
+
+    train_indices, val_indices = indices[split:], indices[:split]
+    return train_indices, val_indices
+
+def get_test_indices():
+    with open('test_indices.pkl', 'rb') as f:
+        test_indices = pickle.load(f)
+    return test_indices

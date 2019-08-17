@@ -32,25 +32,6 @@ import util
 from args import get_train_args
 from evaluate import get_generated_summaries
 
-
-def gen_train_val_indices(dataset, validation_split=0.1, shuffle=True):
-    # Ignore indices from test set and videos where ground-truth is missing
-    with open('test_indices.pkl', 'rb') as f:
-        test_indices = pickle.load(f)
-    with open('none_idxs.pkl', 'rb') as f:
-        none_indices = pickle.load(f)
-
-    dataset_size = len(dataset)
-    indices = [idx for idx in range(dataset_size) if idx not in test_indices and idx not in none_indices]
-    split = int(np.floor(validation_split * len(indices)))
-
-    if shuffle :
-        np.random.seed(args.seed)
-        np.random.shuffle(indices)
-
-    train_indices, val_indices = indices[split:], indices[:split]
-    return train_indices, val_indices
-
 def main(course_dir, text_embedding_size, audio_embedding_size, image_embedding_size, hidden_size, drop_prob, max_text_length, out_heatmaps_dir, args, batch_size=3, num_epochs=100):
     # Set up logging and devices
     args.save_dir = util.get_save_dir(args.save_dir, args.name, training=True)
