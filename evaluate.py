@@ -129,7 +129,7 @@ def evaluate(courses_dir, hidden_size, text_embedding_size, audio_embedding_size
                                             batch_images, original_img_lengths, batch_target_indices, original_target_len, max_dec_len)
 
             # Generate summary for current batch
-            log.info("\n\nGenerating summaries for batch {}\n".format(batch_idx))
+            print("\n\nGenerating summaries for batch {}\n".format(batch_idx))
 
             ###### FOR TESTING ##########
 #             print(batch_source_paths)
