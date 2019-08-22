@@ -81,6 +81,9 @@ class RNNEncoder(nn.Module):
                            dropout = drop_prob if num_layers > 1 else 0.)
 
     def forward(self, x, lengths):
+        # Convert python list of lengths to a Tensor
+        lengths = torch.Tensor(lengths)
+
         # Save the original padded length for use by pad_packed_sequence
         orig_len = x.size(1)
 
@@ -90,7 +93,7 @@ class RNNEncoder(nn.Module):
         x = pack_padded_sequence(x, lengths, batch_first = True)
 
         # Apply RNN
-        x, _ = self.rnn(x) # (batch_size, seq_len, 2 * hidden_size)
+        x, (x_hidden, _) = self.rnn(x) # (batch_size, seq_len, 2 * hidden_size)
 
         # Unpack and reverse sort
         x, _ = pad_packed_sequence(x, batch_first = True, total_length = orig_len)
@@ -100,7 +103,9 @@ class RNNEncoder(nn.Module):
         # Apply dropout (RNN applies after all but the last layer)
         x = F.dropout(x, self.drop_prob, self.training)
 
-        return x
+        x_hidden = x_hidden.transpose(0,1)          # to conver the hidden state to batch first
+
+        return x, x_hidden
 
 
 class ImageEmbedding(nn.Module):
@@ -112,19 +117,11 @@ class ImageEmbedding(nn.Module):
 
     This is from the paper Show, Attend and Tell.
     """
-    def __init__(self, encoded_image_size = 14):
+    def __init__(self):
         super(ImageEmbedding, self).__init__()
-        self.enc_image_size = encoded_image_size
 
         # I have used ResNet to extract the features, I could probably experiment with VGG
-        resnet = torchvision.models.resnet101(pretrained = True) #Pretrained ImageNet ResNet-101
-
-        # Remove linear and pool layers (since we are not doing classification)
-        modules = list(resnet.children())[:-2]
-        self.resnet = nn.Sequential(*modules)
-
-        # Resize image to fixed size to allow input images of variable sizes
-        self.adaptive_pool = nn.AdaptiveAvgPool2d((encoded_image_size, encoded_image_size))
+        self.resnet = torchvision.models.resnet101(pretrained = True) #Pretrained ImageNet ResNet-101
 
         self.fine_tune()
     
@@ -138,12 +135,10 @@ class ImageEmbedding(nn.Module):
         Return:
             Encoded images
         """
-        out = self.resnet(images)      # (batch_size, 2048, image_size/32, image_size/32)
-        out = self.adaptive_pool(out)  # (batch_size, 2048, encoded_image_size, encoded_image_size)
-        out = out.permute(0, 2, 3, 1)  # (batch_size, encoded_image_size, encoded_image_size, 2048)
+        out = self.resnet(images)      # (batch_size, 1000)
         return out
 
-    def fine_tune(self, fine_tune = True):
+    def fine_tune(self, fine_tune = False):
         """
         Allow or prevent the calculation of gradients for convolutional blocks 2 through 4 of the encoder.
 

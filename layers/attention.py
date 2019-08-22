@@ -99,52 +99,88 @@ def masked_softmax(logits, mask, dim=-1, log_softmax=False):
 
 class MultimodalAttentionDecoder(nn.Module):
     """
-    Used to calculate the hierarchical attention of the image/audio aware text vectors
-    The code is inspired from the PyTorch tutorials : 
-    https://pytorch.org/tutorials/intermediate/seq2seq_translation_tutorial.html
-    Args:
-        hidden_size (int) : The hidden size of the input features
+    Multimodal Attention decoder class
+    Parameters : 
+    text_embedding_size (The Modality layer output) : (batch, max_seq_len, 2*hidden_size)
+    hidden_size (The decoder output dimension) : (batch, 1, hidden_size) where hidden size is the that of the decoder
+    output_size (The size of the input sentences with padding) : (batch, max_seq_len)
+    num_layers (The number of layers of the decoder)
+    dropout (The dropout after the decoder)
     """
-    def __init__(self, hidden_size, max_text_length, drop_prob=0.1):
+    def __init__(self, text_embedding_size, hidden_size, output_size, num_layers=1, dropout=0.1):
         super(MultimodalAttentionDecoder, self).__init__()
+        self.text_embedding_size = text_embedding_size
         self.hidden_size = hidden_size
-        self.drop_prob = drop_prob
-        self.max_text_length = max_text_length
-        self.gru = nn.GRU(hidden_size * 2, hidden_size * 2)
-        self.att_audio = nn.Linear(self.hidden_size * 4, self.max_text_length)
-        self.att_img = nn.Linear(self.hidden_size * 4, self.max_text_length)
-#         self.att_mm = nn.Linear(self.hidden_size * 6, self.max_text_length)
-        self.att_mm_audio = nn.Linear(self.hidden_size * 4, self.max_text_length)
-        self.att_mm_img = nn.Linear(self.hidden_size * 4, self.max_text_length)
-        self.att_combine = nn.Linear(self.hidden_size * 6, self.hidden_size * 2)
-        self.out = nn.Linear(self.hidden_size * 2, self.max_text_length)
+        self.output_size = output_size
+        self.num_layers = num_layers
+        self.dropout = dropout
 
+        # For text-audio attention
+        self.W1 = nn.Linear(2 * self.hidden_size, 2 * self.hidden_size)
+        self.W2 = nn.Linear(self.hidden_size, 2 * self.hidden_size)
+        self.Wc1 = nn.Linear(1, 2 * self.hidden_size)
+        self.v1 = nn.Linear(2 * self.hidden_size, 1)
+        self.tanh = nn.Tanh()
 
-    def forward(self, audio_aware_text, image_aware_text, hidden_gru, text_mask):
+        # For text-image attention
+        self.W3 = nn.Linear(2 * self.hidden_size, 2 * self.hidden_size)
+        self.W4 = nn.Linear(self.hidden_size, 2 * self.hidden_size)
+        self.Wc2 = nn.Linear(1, 2 * self.hidden_size)
+        self.v2 = nn.Linear(2 * self.hidden_size, 1)
+        # self.tanh2 = nn.Tanh()
+
+        # For multimodal attention
+        self.W_beta_1 = nn.Linear(2 * self.hidden_size, 2 * self.hidden_size)       # the decoder hidden size should be 2 * hidden_size at every timestep (For decoder hidden state)
+        self.W_beta_2 = nn.Linear(self.hidden_size, 2 * self.hidden_size)       # Linear layer c1
+        self.W_beta_3 = nn.Linear(2 * self.hidden_size, 2 * self.hidden_size)       # the decoder hidden size should be 2 * hidden_size at every timestep (For decoder hidden state)
+        self.W_beta_4 = nn.Linear(self.hidden_size, 2 * self.hidden_size)       # Linear layer c2
+        self.v_beta_1 = nn.Linear(2 * self.hidden_size, 1)
+        self.v_beta_2 = nn.Linear(2 * self.hidden_size, 1)
+
+        # For the output layer
+        self.lstm = nn.LSTM(self.text_embedding_size + 2*self.hidden_size, self.hidden_size, self.num_layers, batch_first=True)
+        self.out = nn.Linear(self.hidden_size, self.output_size)
+        self.softmax = nn.Softmax()
+
+    def forward(self, sent_embed, decoder_hidden, decoder_cell_state, text_audio_enc_out, text_img_enc_out, coverage_vec, mask): # sent_embed : (batch, 1, text_embedding_size); decoder_hidden (batch, num_dir * num_layers, hidden_size)
+        # For the text-audio attention
+        e1 = self.v1(self.tanh(self.W1(text_audio_enc_out) + self.W2(decoder_hidden) + self.Wc1(coverage_vec))) # (batch, max_seq_len, 1)
+        att_weights_1 = F.softmax(e1, dim=1)        # (batch, max_seq_len, 1)
+        c1 = att_weights_1 * text_audio_enc_out     # (batch, max_seq_len, 2 * hidden_size)
+        c1 = torch.sum(c1, dim=1)                   # (batch, 2 * hidden_size)
+
+        # For the text-image attention
+        e2 = self.v2(self.tanh(self.W3(text_img_enc_out) + self.W4(decoder_hidden) + self.Wc2(coverage_vec)))
+        att_weights_2 = F.softmax(e2, dim=1)
+        c2 = att_weights_2 * text_img_enc_out
+        c2 = torch.sum(c2, dim=1)       # (batch, 2 * hidden_size)
+
+        # For the multimodal attention
+        # e3 = self.v3(self.tanh(self.W5(c1) + self.W2(c2)))      # (batch, 1)
+        # c3 = e3 * c1 + e3 * c2              # (batch, 2 * hidden_size)
+        e_beta_1 = self.v_beta_1(self.tanh(self.W_beta_1(c1.unsqueeze(1)) + self.W_beta_2(decoder_hidden)))  # (batch, num_dir*num_layers, 1)
+        e_beta_2 = self.v_beta_2(self.tanh(self.W_beta_3(c2.unsqueeze(1)) + self.W_beta_4(decoder_hidden)))  # (batch, num_dir*num_layers, 1)
+        e_beta = torch.cat((e_beta_1, e_beta_2), dim=1)         # (batch, 2, 1)
+        att_beta = F.softmax(e_beta, dim=1)                     # (batch, 2, 1)
+        c3 = torch.stack((c1, c2), dim=1) * att_beta            # (batch, 2, 2 * hidden_size)
+        c3 = torch.sum(c3, dim=1)                               # (batch, 2 * hidden_size)
+        att_cov_dist = torch.bmm(torch.cat((att_weights_1, att_weights_2), dim=2), att_beta)            # (batch, max_seq_len, 1)
+        # beta_1 = e_beta_1 * c1          # (batch, num_dir*num_layers, 2 * hidden_size)
+        # beta_1 = torch.sum(beta_1, dim=1)       # (batch, 2 * hidden_size)
+
+        # e_beta_2 = self.v_beta_2(self.tanh(self.W_beta_3(c2.unsqueeze(1)) + self.W_beta_4(decoder_hidden)))  # (batch, num_dir*num_layers, 1)
+        # beta_2 = e_beta_2 * c2          # (batch, num_layers*num_dir, 2 * hidden_size)
+        # beta_2 = torch.sum(beta_2, dim=1)   # (batch, 2 * hidden_size)
+
+        # c3 = beta_1*c1 + beta_2*c2            # (batch, 2 * hidden_size)
+        # att_cov_dist = e_beta_1*att_weights_1 + e_beta_2*att_weights_2          # (batch, max_seq_len, 1)
+        coverage_vec = coverage_vec + att_cov_dist          # (batch, max_seq_len, 1)
         
-        attention_weights_audio = F.softmax(self.att_audio(torch.cat((audio_aware_text, hidden_gru), 2)), dim=2)
-        attention_applied_audio = torch.bmm(attention_weights_audio, audio_aware_text)
+        cat_input = torch.cat((c3.unsqueeze(1), sent_embed), dim=2)        # (batch, 1, 2*hidden_size + text_embedding_size)
 
-        attention_weights_img = F.softmax(self.att_img(torch.cat((image_aware_text, hidden_gru), 2)), dim=2)
-        attention_applied_img = torch.bmm(attention_weights_img, image_aware_text)
+        decoder_out, (decoder_hidden, decoder_cell_state) = self.lstm(cat_input, (decoder_hidden.transpose(0,1), decoder_cell_state))                       # (batch, 1, hidden_size)
+        decoder_out = decoder_out.view(-1, decoder_out.size(-1))    # (batch*1, hidden_size)
 
-#         attention_weights_mm = F.softmax(self.att_mm(torch.cat((attention_applied_audio, attention_applied_img, hidden_gru), 2)), dim=1)
-        attention_weights_mm_audio = F.softmax(self.att_mm_audio(torch.cat((attention_applied_audio, hidden_gru), 2)), dim=2)
-        attention_weights_mm_img = F.softmax(self.att_mm_img(torch.cat((attention_applied_img, hidden_gru), 2)), dim=2)
-        
-#         attention_applied_mm = torch.bmm(attention_weights_mm, attention_applied_audio) + torch.bmm(attention_weights_mm, attention_applied_img)
-        attention_applied_mm = torch.bmm(attention_weights_mm_audio, attention_applied_audio) + torch.bmm(attention_weights_mm_img, attention_applied_img)
+        final_out = masked_softmax(self.out(decoder_out), mask)       # (batch, max_transcript_len) # TODO use masked softmax
 
-        final_attention_weights = attention_weights_mm_audio[0]*attention_weights_audio[0] + attention_weights_mm_img[0]*attention_weights_img[0]
-        
-#         print('final_attention_weights: {}'.format(final_attention_weights.size()))
-        
-        final_out = torch.cat((audio_aware_text, image_aware_text, attention_applied_mm), 2)
-        final_out = self.att_combine(final_out)
-        final_out = F.relu(final_out)
-        final_out, hidden_gru = self.gru(final_out, hidden_gru)
-        final_out = masked_softmax(self.out(final_out), text_mask, log_softmax=False)    # TODO: apply masked softmax
-        return hidden_gru, final_out, final_attention_weights
-
-    def initHidden(self):
-        return torch.zeros(1, self.max_text_length, self.hidden_size * 2)
+        return final_out, decoder_hidden.transpose(0,1), decoder_cell_state, att_cov_dist, coverage_vec
