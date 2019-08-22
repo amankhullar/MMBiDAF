@@ -30,14 +30,17 @@ from nltk.tokenize import sent_tokenize
 
 import util
 from args import get_train_args
-from evaluate import get_generated_summaries
+import evaluate
 
-def main(course_dir, text_embedding_size, audio_embedding_size, image_embedding_size, hidden_size, drop_prob, max_text_length, out_heatmaps_dir, args, batch_size=3, num_epochs=100):
+def main(course_dir, text_embedding_size, audio_embedding_size, image_embedding_size, hidden_size, drop_prob, max_text_length, out_heatmaps_dir, args, batch_size=3, num_epochs=100, USE_CPU=False, SINGLE=False):
     # Set up logging and devices
     args.save_dir = util.get_save_dir(args.save_dir, args.name, training=True)
     log = util.get_logger(args.save_dir, args.name)
     tbx = SummaryWriter(args.save_dir)
     device, args.gpu_ids = util.get_available_devices()
+    if USE_CPU:
+        device = torch.device('cpu')
+        args.gpu_ids = []
     log.info(f'Args: {dumps(vars(args), indent=4, sort_keys=True)}')
     args.batch_size *= max(1, len(args.gpu_ids))
 
@@ -89,13 +92,15 @@ def main(course_dir, text_embedding_size, audio_embedding_size, image_embedding_
 
     # Create model
     model = MMBiDAF(hidden_size, text_embedding_size, audio_embedding_size, image_embedding_size, device, drop_prob, max_text_length)
-    model = nn.DataParallel(model, args.gpu_ids)
+    if not USE_CPU:
+        model = nn.DataParallel(model, args.gpu_ids)
     if args.load_path:
         log.info(f'Loading checkpoint from {args.load_path}...')
-        model, step = util.load_model(model, args.load_path, args.gpu_ids)
+        model, step = util.load_model(model, args.load_path, device, args.gpu_ids)
     else:
         step = 0
-    model = model.to(device)
+    if not USE_CPU:
+        model = model.to(device)
     model.train()
     ema = util.EMA(model, args.ema_decay)           # For exponential moving average
 
@@ -127,15 +132,16 @@ def main(course_dir, text_embedding_size, audio_embedding_size, image_embedding_
                 loss = 0
                 max_dec_len = torch.max(original_target_len)             # TODO check error : max decoder timesteps for each batch 
 
-                # Transfer tensors to GPU
-                batch_text = batch_text.to(device)
-                log.info("Loaded batch text")
-                batch_audio = batch_audio.to(device)
-                log.info("Loaded batch audio")
-                batch_images = batch_images.to(device)
-                log.info("Loaded batch image")
-                batch_target_indices = batch_target_indices.to(device)
-                log.info("Loaded batch targets")
+                if not USE_CPU:
+                    # Transfer tensors to GPU
+                    batch_text = batch_text.to(device)
+                    log.info("Loaded batch text")
+                    batch_audio = batch_audio.to(device)
+                    log.info("Loaded batch audio")
+                    batch_images = batch_images.to(device)
+                    log.info("Loaded batch image")
+                    batch_target_indices = batch_target_indices.to(device)
+                    log.info("Loaded batch targets")
 
                 # Setup for forward
                 batch_size = batch_text.size(0)
@@ -173,18 +179,25 @@ def main(course_dir, text_embedding_size, audio_embedding_size, image_embedding_
                     # Evaluate and save checkpoint
                     log.info(f'Evaluating at step {step}...')
                     ema.assign(model)
-                    # TODO
-                    # scores, results = evaluate(model, dev_loader, device,
-                    #                               args.dev_eval_file,
-                    #                               args.max_ans_len,
-                    #                               args.use_squad_v2)
+                    model.eval()
+                    
+                    # Evaluate the model on the training set
+                    evaluate.evaluate(course_dir, hidden_size, text_embedding_size, audio_embedding_size,\
+                        image_embedding_size, drop_prob, max_text_length, args, checkpoint_path='', batch_size=1,\
+                        SINGLE=SINGLE, model=model, test_text_loader=val_text_loader, test_audio_loader=val_audio_loader,\
+                        test_image_loader=val_image_loader, test_target_loader=val_target_loader, WHILE_TRAIN=True)
+
+                    model.train()
                     saver.save(step, model, device)
                     ema.resume(model)
 
                 # Generate summary
                 print('Generated summary for iteration {}: '.format(epoch))
-                summaries = get_generated_summaries(batch_out_distributions, original_text_lengths, batch_source_paths)
+                summaries = evaluate.get_generated_summaries(batch_out_distributions, original_text_lengths, batch_source_paths)
                 print(summaries)
+
+                if SINGLE:
+                    break
                 
                 # Evaluation
                 # rouge = Rouge()
@@ -213,4 +226,6 @@ if __name__ == '__main__':
     batch_size = 1
     out_heatmaps_dir = '/home/amankhullar/model/output_heatmaps/'
     args = get_train_args()
-    main(course_dir, text_embedding_size, audio_embedding_size, image_embedding_size, hidden_size, drop_prob, max_text_length, out_heatmaps_dir, args, batch_size, num_epochs)
+    USE_CPU = True
+    SINGLE = True
+    main(course_dir, text_embedding_size, audio_embedding_size, image_embedding_size, hidden_size, drop_prob, max_text_length, out_heatmaps_dir, args, batch_size, num_epochs, USE_CPU, SINGLE)

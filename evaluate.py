@@ -40,66 +40,68 @@ def get_indices(dataset):
     train_indices, _ = gen_train_val_indices(dataset)
     return train_indices
 
-def evaluate(courses_dir, hidden_size, text_embedding_size, audio_embedding_size, image_embedding_size, drop_prob, max_text_length, args, checkpoint_path, batch_size=1):
-    # Set up logging and devices
-    args.save_dir = util.get_save_dir(args.save_dir, args.name, training=False)
-    log = util.get_logger(args.save_dir, args.name)
-    log.info(f'Args: {dumps(vars(args), indent=4, sort_keys=True)}')
-    
-    device, gpu_ids = util.get_available_devices()
+def evaluate(courses_dir, hidden_size, text_embedding_size, audio_embedding_size, image_embedding_size, drop_prob, max_text_length, args, checkpoint_path, batch_size=1,\
+    SINGLE=False, model=None, test_text_loader=None, test_audio_loader=None, test_image_loader=None, test_target_loader=None, WHILE_TRAIN=True):
+    if not WHILE_TRAIN:
+        # Set up logging and devices
+        args.save_dir = util.get_save_dir(args.save_dir, args.name, training=False)
+        log = util.get_logger(args.save_dir, args.name)
+        log.info(f'Args: {dumps(vars(args), indent=4, sort_keys=True)}')
+        
+        device, gpu_ids = util.get_available_devices()
 
-    if USE_CPU:
-        device = torch.device('cpu')    #### TODO : only because GPU is out of memory
-        gpu_ids = None    #### TODO : Gpu out of memory
-    
-    if gpu_ids is not None:
-        args.batch_size *= max(1, len(gpu_ids))
+        if USE_CPU:
+            device = torch.device('cpu')    #### TODO : only because GPU is out of memory
+            gpu_ids = None    #### TODO : Gpu out of memory
+        
+        if gpu_ids is not None:
+            args.batch_size *= max(1, len(gpu_ids))
 
-    # Set random seed
-    log.info(f'Using random seed {args.seed}...')
-    np.random.seed(args.seed)
-    torch.manual_seed(args.seed)
-    torch.cuda.manual_seed_all(args.seed)
+        # Set random seed
+        log.info(f'Using random seed {args.seed}...')
+        np.random.seed(args.seed)
+        torch.manual_seed(args.seed)
+        torch.cuda.manual_seed_all(args.seed)
 
-    model = MMBiDAF(hidden_size, text_embedding_size, audio_embedding_size, image_embedding_size, device, drop_prob, max_text_length)
-    model = nn.DataParallel(model, gpu_ids)
-    
-    log.info(f'Loading checkpoint from {args.load_path}...')
-    model = util.load_model(model, checkpoint_path, device, gpu_ids, return_step=False)
-    model = model.to(device)
-    model.eval()
-    # the loading is being performed in the train.py file as well
+        model = MMBiDAF(hidden_size, text_embedding_size, audio_embedding_size, image_embedding_size, device, drop_prob, max_text_length)
+        model = nn.DataParallel(model, gpu_ids)
+        
+        log.info(f'Loading checkpoint from {args.load_path}...')
+        model = util.load_model(model, checkpoint_path, device, gpu_ids, return_step=False)
+        model = model.to(device)
+        model.eval()
+        # the loading is being performed in the train.py file as well
 
-    # model = load_model(model, checkpoint_path, args.gpu_ids)
-    print("Model Loaded")
-#     print(model)
+        # model = load_model(model, checkpoint_path, args.gpu_ids)
+        print("Model Loaded")
+    #     print(model)
 
-    # Create Dataset objects
-    text_dataset = TextDataset(courses_dir, max_text_length)
-    audio_dataset = AudioDataset(courses_dir)
-    target_dataset = TargetDataset(courses_dir)
-    # Preprocess the image in prescribed format
-    normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-    transform = transforms.Compose([transforms.RandomResizedCrop(256), transforms.RandomHorizontalFlip(), transforms.ToTensor(), normalize,])
-    image_dataset = ImageDataset(courses_dir, transform)
+        # Create Dataset objects
+        text_dataset = TextDataset(courses_dir, max_text_length)
+        audio_dataset = AudioDataset(courses_dir)
+        target_dataset = TargetDataset(courses_dir)
+        # Preprocess the image in prescribed format
+        normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        transform = transforms.Compose([transforms.RandomResizedCrop(256), transforms.RandomHorizontalFlip(), transforms.ToTensor(), normalize,])
+        image_dataset = ImageDataset(courses_dir, transform)
 
-    # Creating data indices for training and validation splits:
-    test_indices = get_indices(text_dataset)
+        # Creating data indices for training and validation splits:
+        test_indices = get_indices(text_dataset)
 
-    # Creating PT data sampler and loaders:
-    test_sampler = torch.utils.data.SequentialSampler(test_indices)
+        # Creating PT data sampler and loaders:
+        test_sampler = torch.utils.data.SequentialSampler(test_indices)
 
-    # Get sentence embeddings
-    test_text_loader = torch.utils.data.DataLoader(text_dataset, batch_size=batch_size, shuffle=False, num_workers=2, collate_fn=collator, sampler=test_sampler)
+        # Get sentence embeddings
+        test_text_loader = torch.utils.data.DataLoader(text_dataset, batch_size=batch_size, shuffle=False, num_workers=2, collate_fn=collator, sampler=test_sampler)
 
-    # Get Audio embeddings
-    test_audio_loader = torch.utils.data.DataLoader(audio_dataset, batch_size=batch_size, shuffle=False, num_workers=2, collate_fn=collator, sampler=test_sampler)
+        # Get Audio embeddings
+        test_audio_loader = torch.utils.data.DataLoader(audio_dataset, batch_size=batch_size, shuffle=False, num_workers=2, collate_fn=collator, sampler=test_sampler)
 
-    # Get images
-    test_image_loader = torch.utils.data.DataLoader(image_dataset, batch_size=batch_size, shuffle=False, num_workers=2, collate_fn=collator, sampler=test_sampler)
+        # Get images
+        test_image_loader = torch.utils.data.DataLoader(image_dataset, batch_size=batch_size, shuffle=False, num_workers=2, collate_fn=collator, sampler=test_sampler)
 
-    # Load Target text
-    test_target_loader = torch.utils.data.DataLoader(target_dataset, batch_size=batch_size, shuffle=False, num_workers=2, collate_fn=target_collator, sampler=test_sampler)
+        # Load Target text
+        test_target_loader = torch.utils.data.DataLoader(target_dataset, batch_size=batch_size, shuffle=False, num_workers=2, collate_fn=target_collator, sampler=test_sampler)
 
     batch_idx = 0
     total_scores = [0]*9        # in order of 'p' 'r' and 'f' for r1, r2, rl
@@ -112,15 +114,16 @@ def evaluate(courses_dir, hidden_size, text_embedding_size, audio_embedding_size
 
             max_dec_len = max(original_target_len)             # TODO check error : max decoder timesteps for each batch 
 
-            # Transfer tensors to GPU
-            batch_text = batch_text.to(device)
-            # log.info("Loaded batch text")
-            batch_audio = batch_audio.to(device)
-            # log.info("Loaded batch audio")
-            batch_images = batch_images.to(device)
-            # log.info("Loaded batch image")
-            batch_target_indices = batch_target_indices.to(device)
-            # log.info("Loaded batch targets")
+            if not WHILE_TRAIN:
+                # Transfer tensors to GPU
+                batch_text = batch_text.to(device)
+                # log.info("Loaded batch text")
+                batch_audio = batch_audio.to(device)
+                # log.info("Loaded batch audio")
+                batch_images = batch_images.to(device)
+                # log.info("Loaded batch image")
+                batch_target_indices = batch_target_indices.to(device)
+                # log.info("Loaded batch targets")
 
             batch_out_distributions, _ = model(batch_text, original_text_lengths, batch_audio, original_audio_lengths, \
                                             batch_images, original_img_lengths, batch_target_indices, original_target_len, max_dec_len)
@@ -153,6 +156,9 @@ def evaluate(courses_dir, hidden_size, text_embedding_size, audio_embedding_size
             except Exception as e:
                 print("Error: " + str(e))
                 continue
+
+            if SINGLE:
+                break
 
         # Average Rouge score across batches
         for idx in range(len(total_scores)):                
