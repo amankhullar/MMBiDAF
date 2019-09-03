@@ -24,15 +24,18 @@ def create_word_vectors(word_embedding_path, save_embedding_path, save_word_idx_
     word_vectors = torch.tensor(vecs)           # the word vector tensor
 
     # Save the word vector tensor
-    torch.save(os.path.join(word_vectors,'word_vectors.pt'), save_embedding_path)
+    torch.save(word_vectors, os.path.join(save_embedding_path, 'word_vectors.pt'))
+    print("Saved word vector Tensor")
 
     # Save the word to idx dictionary
-    with open(save_word_idx_path, 'wb') as f:
-        pickle.dump(os.path.join(word_idx,'word_idx.pkl'), f)
+    with open(os.path.join(save_word_idx_path, 'word_idx.pkl'), 'wb') as f:
+        pickle.dump(word_idx, f)
+    print("Saved Word to Idx dictionary")
 
     # Save the idx to word dictionary
-    with open(save_idx_word_path, 'wb') as f:
-        pickle.dump(os.path.join(idx_word,'idx_word.pkl'), f)
+    with open(os.path.join(save_idx_word_path, 'idx_word.pkl'), 'wb') as f:
+        pickle.dump(idx_word, f)
+    print("Saved Idx to word dictionary")
 
 if __name__ == "__main__":
     word_embedding_path = "/home/aman_khullar/how2/how2-release/word_embedding/cmu_partition.train.vec"
