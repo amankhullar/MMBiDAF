@@ -26,23 +26,23 @@ class MMBiDAF(nn.Module):
         drop_prob (float) : Dropout probability.
     """
 
-    def __init__(self, hidden_size, text_embedding_size, audio_embedding_size, image_embedding_size, device, drop_prob=0., max_transcript_length=405):
+    def __init__(self, hidden_size, word_vectors, text_embedding_size, audio_embedding_size, image_embedding_size, device, drop_prob=0., max_transcript_length=405):
         super(MMBiDAF, self).__init__()
 
         self.device = device
         self.max_transcript_length = max_transcript_length
 
-        self.emb = Embedding(embedding_size=text_embedding_size,
-                             hidden_size=hidden_size,
-                             drop_prob=drop_prob)
+        self.emb = TextEmbedding(word_vectors=word_vectors,
+                                hidden_size=hidden_size,
+                                drop_prob=drop_prob)
         
-        self.a_emb = Embedding(embedding_size=audio_embedding_size,     # Since audio embedding size is not 300, we need another highway encoder layer
-                               hidden_size=hidden_size,                 # and we cannot increase the hidden size beyond 100
-                               drop_prob=drop_prob)
+        self.a_emb = Aud_Img_Embedding(embedding_size=audio_embedding_size,     # Since audio embedding size is not 300, we need another highway encoder layer
+                                       hidden_size=hidden_size,                 # and we cannot increase the hidden size beyond 100
+                                       drop_prob=drop_prob)
 
-        self.i_emb = Embedding(embedding_size=image_embedding_size,     # Since image embedding size is not 300, we need another highway encoder layer
-                               hidden_size=hidden_size,                 # and we cannot increase the hidden size beyond 100
-                               drop_prob=drop_prob)
+        self.i_emb = Aud_Img_Embedding(embedding_size=image_embedding_size,     # Since image embedding size is not 300, we need another highway encoder layer
+                                       hidden_size=hidden_size,                 # and we cannot increase the hidden size beyond 100
+                                       drop_prob=drop_prob)
 
         self.text_enc = RNNEncoder(input_size=hidden_size,
                                    hidden_size=hidden_size,
