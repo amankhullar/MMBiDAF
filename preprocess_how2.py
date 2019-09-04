@@ -21,6 +21,18 @@ def create_word_vectors(word_embedding_path, save_embedding_path, save_word_idx_
         word_idx[word] = idx
         idx_word[idx] = word
     
+    vecs.append([0.]*100)                         # word vector for OOV words
+    word_idx['<OOV>'] = len(word_idx)             # last idx is for OOV
+    idx_word[len(idx_word)] = '<OOV>'             # 'OOV' token for last idx
+
+    vecs.append([0.]*100)                           # word vector for <START> token
+    word_idx['<START>'] = len(word_idx)             # last idx is for <START>
+    idx_word[len(idx_word)] = '<START>'             # <START> token for last idx
+
+    vecs.append([0.]*100)                         # word vector for <END> words
+    word_idx['<END>'] = len(word_idx)             # last idx is for <END>
+    idx_word[len(idx_word)] = '<END>'             # <END> token for last idx
+
     word_vectors = torch.tensor(vecs)           # the word vector tensor
 
     # Save the word vector tensor

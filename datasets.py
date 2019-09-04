@@ -15,59 +15,91 @@ from nltk.stem import WordNetLemmatizer
 
 final_indices_path = 'dataset_inter2.pkl'
 
-class TextDataset(Dataset):
+class MultimodalDataset(Dataset):
     """
     A Pytorch dataset class to be used in the Pytorch Dataloader to create text batches
     """
-    def __init__(self, courses_dir, max_text_length=405):
+    def __init__(self, train_text_path, gt_path, word_idx_path, vid_feat_path, aud_feat_path, max_text_length=1865):
         """
         Args :
              courses_dir (string) : The directory containing the embeddings for the preprocessed sentences 
         """
-        self.courses_dir = courses_dir
-        with open(final_indices_path, 'rb') as f:
-            self.dataset_inter = pickle.load(f)
-        self.text_embedding_paths = self.load_sentence_embeddings_path()
+        self.vid_feat_path = vid_feat_path
+        self.aud_feat_path = aud_feat_path
+
+        try:
+            with open(train_text_path, 'r') as f:
+                transcripts = f.readlines()                 # list of all transcripts
+        except Exception as e:
+            print("Could not open source transcripts with error : " + str(e))
+            sys.exit()
+
+        try:
+            with open(gt_path, 'r') as f:
+                gt = f.readlines()                          # list of all ground truths
+        except Exception as e:
+            print("Could not open target summary with error : " + str(e))
+            sys.exit()
+
+        try:
+            with open(word_idx_path, 'rb') as f:
+                word_idx = pickle.load(f)                   # dictionary containing indices of words
+        except Exception as e:
+            print("Could not open Word_idx dictionary with error : " + str(e))
+            sys.exit()
+
+        self.filename_map = []                          # maps the idx to filename
+        self.text_idxs = {}          # dictionary containing the indices for tokens in training transcripts
+        self.gt_idxs = {}            # dictionary containing the indices for tokens in ground truth summary
+
+        self.create_seq(transcripts, word_idx)      # create seq for source transcripts
+        self.create_seq(gt, word_idx, tgt=True)     # create seq for target summaries
+          
         self.max_text_length = max_text_length
 
-    def load_sentence_embeddings_path(self):
-        transcript_embeddings = []
-
-        # Get sorted list of all courses (excluding any files)
-        dirlist = []
-        for fname in os.listdir(self.courses_dir):
-            if os.path.isdir(os.path.join(self.courses_dir, fname)):
-                dirlist.append(fname)
-        
-        for course_number in sorted(dirlist, key=int):
-            course_transcript_path = os.path.join(self.courses_dir, course_number, 'sentence_features/')
-            for transcript_path in sorted(os.listdir(course_transcript_path), key=self.get_num):
-                if '_' in transcript_path:
-                    continue
-                # Dataset cleanup for consistency
-                path_check = course_number + '/' + transcript_path[:-3]
-                if path_check not in self.dataset_inter:
-                    continue
-
-                path = self.courses_dir + course_number + '/sentence_features3/' + transcript_path
-                transcript_embeddings.append(path)
-        
-        return transcript_embeddings
-
-    def get_num(self, str):
-        return int(re.search(r'\d+', str).group())
+    def create_seq(self, text, word_idx, tgt=False):
+        for trans in text:
+            trans = trans.split(' ')
+            filename = trans[0]
+            if not tgt:
+                self.filename_map.append(filename)
+            trans = trans[1:]
+            idxs = []
+            idxs.append(word_idx['<START>'])
+            for word in trans:
+                if word in word_idx:
+                    idxs.append(word_idx[word])
+                else:
+                    idxs.append(word_idx['<OOV>'])
+            idxs.append(word_idx['<END>'])
+            if not tgt:
+                self.text_idxs[filename] = idxs
+            else:
+                self.gt_idxs[filename] = idxs
 
     def __len__(self):
-        return len(self.text_embedding_paths)
+        return len(self.filename_map)
     
     def __getitem__(self, idx):
-        self.embedding_path = self.text_embedding_paths[idx]
-        self.embedding_dict = torch.load(self.embedding_path)
-        word_vectors = torch.zeros(len(self.embedding_dict)+1, 300)
-        for count, sentence in enumerate(self.embedding_dict):
-            word_vectors[count] = self.embedding_dict[sentence]
-        word_vectors[len(self.embedding_dict)] = torch.zeros(1, 300) - 1            # End of summary token embedding
-        return word_vectors, len(self.embedding_dict) + 1                           # Added EOS to the original data
+        filename = self.filename_map[idx]
+
+        src_seq = self.text_idxs[filename]
+        tgt_seq = self.gt_idxs[filename]
+        src_seq = torch.Tensor(src_seq)         # (src_seq_len)
+        tgt_seq = torch.Tensor(tgt_seq)         # (tgt_seq_len)
+
+        # Get the video features
+        try:
+            vid_feats = np.load(os.path.join(self.vid_feat_path, filename+'.npy'))          # (vid_seq_len, img_feat_size)
+        except Exception as e:
+            print("Could not find video features : " + str(e))
+            sys.exit()
+        
+        # TODO : Get the Audio features
+            aud_feats = torch.Tensor()
+
+        return src_seq, vid_feats, aud_feats, tgt_seq
+
 
 class ImageDataset(Dataset):
     """
@@ -296,10 +328,38 @@ class TargetDataset(Dataset):
         return True
 
 def collator(DataLoaderBatch):
-    items = [item[0] for item in DataLoaderBatch]
-    lengths = [num_elements.size(0) for num_elements in items]
-    padded_seq = torch.nn.utils.rnn.pad_sequence(items, batch_first=True, padding_value=0)
-    return padded_seq, lengths
+    """
+    Function to generate batch-wise padding of the data (dynamic padding).
+    Args: list of tuple(src_seqs, vid_feature_seqs, aud_feature_seqs, tgt_seqs)
+        - src_seq: torch tensor of variable length
+        - vid_feat_seqs: 2D torch tensor of variable frame len in videos
+        - aud_feat_seqs: 2D torch tensor of variable frame len in audios
+        - tgt_seq: torch tensor of variable length
+    Returns:
+        src_seqs: torch tensor of shape (batch_size, padded_length)
+        src_lengths: list of length (batch_size) which is the original length for each padded src seq
+        vid_feat_seqs: torch tensor of shape (batch_size, padded_vid_seq_len, img_feat_size)
+        vid_lengths: list of length (batch_size) which is the original length for each padded video
+        aud_feat_seqs: torch tensor of shape (batch_size, padded_aud_seq_len, aud_feat_size)
+        aud_lengths: list of length (batch_size) which is the original length for each padded audio
+        tgt_seqs: torch tensor of shape (batch_size, padded_length)
+        tgt_lengths: list of length (batch_size) which is the original length for each padded tgt seq
+    """
+    def pad_get_len(items):
+        lengths = [num_elements.size(0) for num_elements in items]
+        padded_seq = torch.nn.utils.rnn.pad_sequence(items, batch_first=True, padding_value=0)
+        return padded_seq, lengths
+
+    # separate the values returned from the dataset
+    src_seqs, vid_feat_seqs, aud_feat_seqs, tgt_seqs = zip(*DataLoaderBatch)
+
+    # pad the tensors and create batches
+    src_seqs, src_lengths = pad_get_len(src_seqs)
+    vid_feat_seqs, vid_lengths = pad_get_len(vid_feat_seqs)
+    aud_feat_seqs, aud_lengths = pad_get_len(aud_feat_seqs)
+    tgt_seqs, tgt_lengths = pad_get_len(tgt_seqs)
+
+    return src_seqs, src_lengths, vid_feat_seqs, vid_lengths, aud_feat_seqs, aud_lengths, tgt_seqs, tgt_lengths
 
 def target_collator(DataLoaderBatch):
     batch_items = [item for item in DataLoaderBatch]

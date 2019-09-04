@@ -48,8 +48,14 @@ def main(course_dir, text_embedding_size, audio_embedding_size, image_embedding_
     torch.manual_seed(args.seed)
     torch.cuda.manual_seed_all(args.seed)
 
-    # Create Dataset objects
-    text_dataset = TextDataset(course_dir, max_text_length)
+    # Create Train Dataset objects
+    train_text_path = os.path.join(course_dir, 'text', 'sum_train', 'tran.tok.txt')
+    gt_path = os.path.join(course_dir, 'text', 'sum_train', 'desc.tok.txt')
+    word_idx_path = os.path.join(course_dir, 'temp', 'word_idx.pkl')
+    vid_feat_path = os.path.join(course_dir, 'video_action_features')   # TODO : check path
+    aud_feat_path = os.path.join(course_dir, 'audio_feat')      # TODO : check path
+    text_dataset = MultimodalDataset(train_text_path, gt_path, word_idx_path, vid_feat_path, aud_feat_path, max_text_length)
+
     audio_dataset = AudioDataset(course_dir)
     target_dataset = TargetDataset(course_dir)
     # Preprocess the image in prescribed format
@@ -202,15 +208,15 @@ def main(course_dir, text_embedding_size, audio_embedding_size, image_embedding_
             print("Epoch loss is : {}".format(loss_epoch/count_item))
 
 if __name__ == '__main__':
-    course_dir = '/home/anish17281/NLP_Dataset/dataset/'
-    text_embedding_size = 300
-    audio_embedding_size = 128
-    image_embedding_size = 1000
+    course_dir = '/home/aman_khullar/how2/'
+    text_embedding_size = 100
+    audio_embedding_size = 43
+    image_embedding_size = 2048
     hidden_size = 100
     drop_prob = 0.2
-    max_text_length = 409
+    max_text_length = 1865   # calculated using a simple script to go over all the transcripts and count tokens in list split by (' ') and ignored filename
     num_epochs = 90
-    batch_size = 1
+    batch_size = 3
     out_heatmaps_dir = '/home/amankhullar/model/output_heatmaps/'
     args = get_train_args()
     main(course_dir, text_embedding_size, audio_embedding_size, image_embedding_size, hidden_size, drop_prob, max_text_length, out_heatmaps_dir, args, batch_size, num_epochs)
