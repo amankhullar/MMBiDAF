@@ -91,6 +91,7 @@ class MultimodalDataset(Dataset):
         # Get the video features
         try:
             vid_feats = np.load(os.path.join(self.vid_feat_path, filename+'.npy'))          # (vid_seq_len, img_feat_size)
+            vid_feats = torch.from_numpy(vid_feats)
         except Exception as e:
             print("Could not find video features : " + str(e))
             sys.exit()

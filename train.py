@@ -99,7 +99,8 @@ def main(course_dir, text_embedding_size, audio_embedding_size, image_embedding_
 
     # Create model
     audio_embedding_size = image_embedding_size # TODO : Remove this statement after getting audio features
-    model = MMBiDAF(hidden_size, text_embedding_size, audio_embedding_size, image_embedding_size, device, drop_prob, max_text_length)
+    word_vectors = torch.load(os.path.join(course_dir, 'temp', 'word_vectors.pt'))
+    model = MMBiDAF(hidden_size, word_vectors, text_embedding_size, audio_embedding_size, image_embedding_size, device, drop_prob, max_text_length)
     model = nn.DataParallel(model, args.gpu_ids)
     if args.load_path:
         log.info(f'Loading checkpoint from {args.load_path}...')
@@ -126,7 +127,7 @@ def main(course_dir, text_embedding_size, audio_embedding_size, image_embedding_
     eps = 1e-8
     log.info("Training...")
     steps_till_eval = args.eval_steps
-    epoch = step // len(TextDataset(course_dir, max_text_length))
+    epoch = step // len(multimodal_dataset)
 
     while epoch != args.num_epochs:
         epoch += 1
@@ -135,9 +136,6 @@ def main(course_dir, text_embedding_size, audio_embedding_size, image_embedding_
         loss_epoch = 0
         with torch.enable_grad(), tqdm(total=len(train_loader.dataset)) as progress_bar:
             for src_seqs, src_lengths, vid_feat_seqs, vid_lengths, aud_feat_seqs, aud_lengths, tgt_seqs, tgt_lengths in train_loader:
-                print("Reached here")
-                print(src_seqs.size(), src_lengths.size(), vid_feat_seqs.size(), vid_lengths.size(), aud_feat_seqs.size(), aud_lengths.size(), tgt_seqs.size(), tgt_lengths.size())
-                sys.exit()
                 loss = 0
                 max_dec_len = torch.max(original_target_len)             # TODO check error : max decoder timesteps for each batch 
 
