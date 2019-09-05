@@ -52,41 +52,45 @@ def main(course_dir, text_embedding_size, audio_embedding_size, image_embedding_
     train_text_path = os.path.join(course_dir, 'text', 'sum_train', 'tran.tok.txt')
     gt_path = os.path.join(course_dir, 'text', 'sum_train', 'desc.tok.txt')
     word_idx_path = os.path.join(course_dir, 'temp', 'word_idx.pkl')
-    vid_feat_path = os.path.join(course_dir, 'video_action_features')   # TODO : check path
+    vid_feat_path = os.path.join(course_dir, 'video_action_features')
     aud_feat_path = os.path.join(course_dir, 'audio_feat')      # TODO : check path
-    text_dataset = MultimodalDataset(train_text_path, gt_path, word_idx_path, vid_feat_path, aud_feat_path, max_text_length)
+    multimodal_dataset = MultimodalDataset(train_text_path, gt_path, word_idx_path, vid_feat_path, vid_feat_path, max_text_length)        # TODO : add the audio features instead of video features
 
-    audio_dataset = AudioDataset(course_dir)
-    target_dataset = TargetDataset(course_dir)
-    # Preprocess the image in prescribed format
-    normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-    transform = transforms.Compose([transforms.RandomResizedCrop(256), transforms.RandomHorizontalFlip(), transforms.ToTensor(), normalize,])
-    image_dataset = ImageDataset(course_dir, transform)
+    # audio_dataset = AudioDataset(course_dir)
+    # target_dataset = TargetDataset(course_dir)
+    # # Preprocess the image in prescribed format
+    # normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+    # transform = transforms.Compose([transforms.RandomResizedCrop(256), transforms.RandomHorizontalFlip(), transforms.ToTensor(), normalize,])
+    # image_dataset = ImageDataset(course_dir, transform)
 
-    assert len(text_dataset) == len(audio_dataset) and len(audio_dataset) == len(image_dataset) and len(image_dataset) == len(target_dataset), "Unequal dataset lengths"
+    # assert len(text_dataset) == len(audio_dataset) and len(audio_dataset) == len(image_dataset) and len(image_dataset) == len(target_dataset), "Unequal dataset lengths"
 
     # Creating data indices for training and validation splits:
-    train_indices, val_indices = gen_train_val_indices(text_dataset)
+    # train_indices, val_indices = gen_train_val_indices(text_dataset)
 
-    # Creating PT data samplers and loaders:
-    train_sampler = torch.utils.data.SequentialSampler(train_indices)
-    val_sampler = torch.utils.data.SequentialSampler(val_indices)
+    # # Creating PT data samplers and loaders:
+    # train_sampler = torch.utils.data.SequentialSampler(train_indices)
+    # val_sampler = torch.utils.data.SequentialSampler(val_indices)
+
+
+    # Load Data Loader
+    train_loader = torch.utils.data.DataLoader(multimodal_dataset, batch_size=batch_size, shuffle=False, num_workers=2, collate_fn=collator)
 
     # Get sentence embeddings
-    train_text_loader = torch.utils.data.DataLoader(text_dataset, batch_size=batch_size, shuffle=False, num_workers=2, collate_fn=collator, sampler=train_sampler)
-    val_text_loader = torch.utils.data.DataLoader(text_dataset, batch_size=batch_size, shuffle=False, num_workers=2, collate_fn=collator, sampler=val_sampler)
+    # train_text_loader = torch.utils.data.DataLoader(text_dataset, batch_size=batch_size, shuffle=False, num_workers=2, collate_fn=collator, sampler=train_sampler)
+    # val_text_loader = torch.utils.data.DataLoader(text_dataset, batch_size=batch_size, shuffle=False, num_workers=2, collate_fn=collator, sampler=val_sampler)
 
-    # Get Audio embeddings
-    train_audio_loader = torch.utils.data.DataLoader(audio_dataset, batch_size=batch_size, shuffle=False, num_workers=2, collate_fn=collator, sampler=train_sampler)
-    val_audio_loader = torch.utils.data.DataLoader(audio_dataset, batch_size=batch_size, shuffle=False, num_workers=2, collate_fn=collator, sampler=val_sampler)
+    # # Get Audio embeddings
+    # train_audio_loader = torch.utils.data.DataLoader(audio_dataset, batch_size=batch_size, shuffle=False, num_workers=2, collate_fn=collator, sampler=train_sampler)
+    # val_audio_loader = torch.utils.data.DataLoader(audio_dataset, batch_size=batch_size, shuffle=False, num_workers=2, collate_fn=collator, sampler=val_sampler)
 
-    # Get images
-    train_image_loader = torch.utils.data.DataLoader(image_dataset, batch_size=batch_size, shuffle=False, num_workers=2, collate_fn=collator, sampler=train_sampler)
-    val_image_loader = torch.utils.data.DataLoader(image_dataset, batch_size=batch_size, shuffle=False, num_workers=2, collate_fn=collator, sampler=val_sampler)
+    # # Get images
+    # train_image_loader = torch.utils.data.DataLoader(image_dataset, batch_size=batch_size, shuffle=False, num_workers=2, collate_fn=collator, sampler=train_sampler)
+    # val_image_loader = torch.utils.data.DataLoader(image_dataset, batch_size=batch_size, shuffle=False, num_workers=2, collate_fn=collator, sampler=val_sampler)
 
-    # Load Target text
-    train_target_loader = torch.utils.data.DataLoader(target_dataset, batch_size=batch_size, shuffle=False, num_workers=2, collate_fn=target_collator, sampler=train_sampler)
-    val_target_loader = torch.utils.data.DataLoader(target_dataset, batch_size=batch_size, shuffle=False, num_workers=2, collate_fn=target_collator, sampler=val_sampler)
+    # # Load Target text
+    # train_target_loader = torch.utils.data.DataLoader(target_dataset, batch_size=batch_size, shuffle=False, num_workers=2, collate_fn=target_collator, sampler=train_sampler)
+    # val_target_loader = torch.utils.data.DataLoader(target_dataset, batch_size=batch_size, shuffle=False, num_workers=2, collate_fn=target_collator, sampler=val_sampler)
 
     # print("lens - train_text_loader {}, val_text_loader {}".format(len(train_text_loader), len(val_text_loader)))
     # print("lens - train_audio_loader {}, val_audio_loader {}".format(len(train_audio_loader), len(val_audio_loader)))
@@ -94,6 +98,7 @@ def main(course_dir, text_embedding_size, audio_embedding_size, image_embedding_
     # print("lens - train_target_loader {}, val_target_loader {}".format(len(train_target_loader), len(val_target_loader)))
 
     # Create model
+    audio_embedding_size = image_embedding_size # TODO : Remove this statement after getting audio features
     model = MMBiDAF(hidden_size, text_embedding_size, audio_embedding_size, image_embedding_size, device, drop_prob, max_text_length)
     model = nn.DataParallel(model, args.gpu_ids)
     if args.load_path:
@@ -128,8 +133,11 @@ def main(course_dir, text_embedding_size, audio_embedding_size, image_embedding_
         log.info("Starting epoch {epoch}...")
         count_item = 0
         loss_epoch = 0
-        with torch.enable_grad(), tqdm(total=len(train_text_loader.dataset)) as progress_bar:
-            for (batch_text, original_text_lengths), (batch_audio, original_audio_lengths), (batch_images, original_img_lengths), (batch_target_indices, batch_source_paths, batch_target_paths, original_target_len) in zip(train_text_loader, train_audio_loader, train_image_loader, train_target_loader):
+        with torch.enable_grad(), tqdm(total=len(train_loader.dataset)) as progress_bar:
+            for src_seqs, src_lengths, vid_feat_seqs, vid_lengths, aud_feat_seqs, aud_lengths, tgt_seqs, tgt_lengths in train_loader:
+                print("Reached here")
+                print(src_seqs.size(), src_lengths.size(), vid_feat_seqs.size(), vid_lengths.size(), aud_feat_seqs.size(), aud_lengths.size(), tgt_seqs.size(), tgt_lengths.size())
+                sys.exit()
                 loss = 0
                 max_dec_len = torch.max(original_target_len)             # TODO check error : max decoder timesteps for each batch 
 

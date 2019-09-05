@@ -98,7 +98,7 @@ class MultimodalDataset(Dataset):
         # TODO : Get the Audio features
             aud_feats = torch.Tensor()
 
-        return src_seq, vid_feats, aud_feats, tgt_seq
+        return src_seq, vid_feats, vid_feats, tgt_seq       # TODO : change the second video features to audio features
 
 
 class ImageDataset(Dataset):
@@ -344,6 +344,8 @@ def collator(DataLoaderBatch):
         aud_lengths: list of length (batch_size) which is the original length for each padded audio
         tgt_seqs: torch tensor of shape (batch_size, padded_length)
         tgt_lengths: list of length (batch_size) which is the original length for each padded tgt seq
+        
+    code adapted from : https://github.com/yunjey/seq2seq-dataloader/
     """
     def pad_get_len(items):
         lengths = [num_elements.size(0) for num_elements in items]
