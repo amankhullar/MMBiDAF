@@ -26,21 +26,24 @@ class MMBiDAF(nn.Module):
         drop_prob (float) : Dropout probability.
     """
 
-    def __init__(self, hidden_size, word_vectors, text_embedding_size, audio_embedding_size, image_embedding_size, device, drop_prob=0., max_transcript_length=405):
+    def __init__(self, hidden_size, word_vectors, text_embedding_size, audio_embedding_size, image_embedding_size, device, drop_prob=0., max_transcript_length=210100):
         super(MMBiDAF, self).__init__()
 
         self.device = device
         self.max_transcript_length = max_transcript_length
+        self.word_vectors = word_vectors
 
-        self.emb = TextEmbedding(word_vectors=word_vectors,
-                                hidden_size=hidden_size,
+        self.emb = TextEmbedding(word_vectors=word_vectors)
+
+        self.text_emb = Embedding(embedding_size=text_embedding_size,     
+                                hidden_size=hidden_size,                 
                                 drop_prob=drop_prob)
-        
-        self.a_emb = Aud_Img_Embedding(embedding_size=audio_embedding_size,     # Since audio embedding size is not 300, we need another highway encoder layer
+
+        self.a_emb = Embedding(embedding_size=audio_embedding_size,     # Since audio embedding size is not 300, we need another highway encoder layer
                                        hidden_size=hidden_size,                 # and we cannot increase the hidden size beyond 100
                                        drop_prob=drop_prob)
 
-        self.i_emb = Aud_Img_Embedding(embedding_size=image_embedding_size,     # Since image embedding size is not 300, we need another highway encoder layer
+        self.i_emb = Embedding(embedding_size=image_embedding_size,     # Since image embedding size is not 300, we need another highway encoder layer
                                        hidden_size=hidden_size,                 # and we cannot increase the hidden size beyond 100
                                        drop_prob=drop_prob)
 
@@ -91,8 +94,9 @@ class MMBiDAF(nn.Module):
         mask = idx < len_expanded
         return mask
 
-    def forward(self, embedded_text, original_text_lengths, embedded_audio, original_audio_lengths, transformed_images, original_image_lengths, batch_target_indices, original_target_len, max_dec_len):
-        text_emb = self.emb(embedded_text)                                                          # (batch_size, num_sentences, hidden_size)
+    def forward(self, vector_text, original_text_lengths, embedded_audio, original_audio_lengths, transformed_images, original_image_lengths, batch_target_indices, original_target_len, max_dec_len):
+        embedded_text = self.emb(vector_text)                                                          # (batch_size, num_sentences, embedding_size)
+        text_emb = self.text_emb(embedded_text)                                                        # (batch_size, num_sentences, hidden_size)
         # print("Highway Embedded text")
         text_encoded, _ = self.text_enc(text_emb, original_text_lengths)                               # (batch_size, num_sentences, 2 * hidden_size)
         # print("Text encoding")
@@ -102,13 +106,13 @@ class MMBiDAF(nn.Module):
         audio_encoded, _ = self.audio_enc(audio_emb, original_audio_lengths)                           # (batch_size, num_audio_envelopes, 2 * hidden_size)
         # print("Audio encoding")
 
-        original_images_size = transformed_images.size()                                             # (batch_size, num_keyframes, num_channels, transformed_image_size, transformed_image_size)
+        # original_images_size = transformed_images.size()                                             # (batch_size, num_keyframes, num_channels, transformed_image_size, transformed_image_size)
         # Combine images across videos in a batch into a single dimension to be embedded by ResNet
-        transformed_images = torch.reshape(transformed_images, (-1, transformed_images.size(2), transformed_images.size(3), transformed_images.size(4)))    # (batch_size * num_keyframes, num_channels, transformed_image_size, transformed_image_size)
-        image_emb = self.image_keyframes_emb(transformed_images)                                    # (batch_size * num_keyframes, encoded_image_size=1000)
+        # transformed_images = torch.reshape(transformed_images, (-1, transformed_images.size(2), transformed_images.size(3), transformed_images.size(4)))    # (batch_size * num_keyframes, num_channels, transformed_image_size, transformed_image_size)
+        # image_emb = self.image_keyframes_emb(transformed_images)                                    # (batch_size * num_keyframes, encoded_image_size=1000)
         # print("Resnet Image")
-        image_emb = torch.reshape(image_emb, (original_images_size[0], original_images_size[1], -1))  # (batch_size, num_keyframes, 300)
-        image_emb = self.i_emb(image_emb)                                                             # (batch_size, num_keyframes, hidden_size)
+        # image_emb = torch.reshape(image_emb, (original_images_size[0], original_images_size[1], -1))  # (batch_size, num_keyframes, 300)
+        image_emb = self.i_emb(transformed_images)                                                             # (batch_size, num_keyframes, hidden_size)
         # print("Highway Image")
         image_encoded, _ = self.image_enc(image_emb, original_image_lengths)                           # (batch_size, num_keyframes, 2 * hidden_size)
         # print("Image Encoding")
@@ -170,7 +174,7 @@ class MMBiDAF(nn.Module):
                     loss = loss + (-1 * torch.log(prob + eps))
                     # print("Loss = {}".format(loss))
 
-                    decoder_input.append(embedded_text[batch_idx, int(batch_target_indices[batch_idx, idx])].unsqueeze(0))         # (1, embedding_size)
+                    decoder_input.append(self.word_vectors[int(batch_target_indices[batch_idx, idx])].unsqueeze(0))         # (1, embedding_size)
                 decoder_input = torch.stack(decoder_input)              # (batch_size, 1, embedding_size)
                 out_distributions.append(out_distribution)              # (max_timesteps, batch_size, total_max_len)
 

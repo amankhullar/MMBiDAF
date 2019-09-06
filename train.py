@@ -199,9 +199,9 @@ def main(course_dir, text_embedding_size, audio_embedding_size, image_embedding_
                     ema.resume(model)
 
                 # Generate summary
-                print('Generated summary for iteration {}: '.format(epoch))
-                summaries = get_generated_summaries(batch_out_distributions, original_text_lengths, batch_source_paths)
-                print(summaries)
+                # print('Generated summary for iteration {}: '.format(epoch))
+                # summaries = get_generated_summaries(batch_out_distributions, original_text_lengths, batch_source_paths)
+                # print(summaries)
                 
                 # Evaluation
                 # rouge = Rouge()
@@ -225,7 +225,7 @@ if __name__ == '__main__':
     image_embedding_size = 2048
     hidden_size = 100
     drop_prob = 0.2
-    max_text_length = 1865   # calculated using a simple script to go over all the transcripts and count tokens in list split by (' ') and ignored filename
+    max_text_length = 210100   # calculated using a simple script to go over all the transcripts and count tokens in list split by (' ') and ignored filename
     num_epochs = 90
     batch_size = 3
     out_heatmaps_dir = '/home/amankhullar/model/output_heatmaps/'
