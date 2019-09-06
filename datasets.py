@@ -85,8 +85,8 @@ class MultimodalDataset(Dataset):
 
         src_seq = self.text_idxs[filename]
         tgt_seq = self.gt_idxs[filename]
-        src_seq = torch.Tensor(src_seq)         # (src_seq_len)
-        tgt_seq = torch.Tensor(tgt_seq)         # (tgt_seq_len)
+        src_seq = torch.Tensor(src_seq).long()         # (src_seq_len)
+        tgt_seq = torch.Tensor(tgt_seq).long()         # (tgt_seq_len)
 
         # Get the video features
         try:

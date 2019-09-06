@@ -25,7 +25,7 @@ class TextEmbedding(nn.Module):
 
     def forward(self, x):
         emb = self.embed(x)   # (batch_size, seq_len, embed_size)
-        emb = F.dropout(x, self.drop_prob, self.training)  # (batch_size, seq_len, embed_size)
+        emb = F.dropout(emb, self.drop_prob, self.training)  # (batch_size, seq_len, embed_size)
         emb = self.proj(emb)  # (batch_size, seq_len, hidden_size)
         emb = self.hwy(emb)   # (batch_size, seq_len, hidden_size)
 

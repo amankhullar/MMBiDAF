@@ -135,10 +135,9 @@ def main(course_dir, text_embedding_size, audio_embedding_size, image_embedding_
         count_item = 0
         loss_epoch = 0
         with torch.enable_grad(), tqdm(total=len(train_loader.dataset)) as progress_bar:
-            for src_seqs, src_lengths, vid_feat_seqs, vid_lengths, aud_feat_seqs, aud_lengths, tgt_seqs, tgt_lengths in train_loader:
+            for batch_text, original_text_lengths, batch_images, original_img_lengths, batch_audio, original_audio_lengths, batch_target_indices, original_target_len in train_loader:
                 loss = 0
-                max_dec_len = torch.max(original_target_len)             # TODO check error : max decoder timesteps for each batch 
-
+                max_dec_len = max(original_target_len)             
                 # Transfer tensors to GPU
                 batch_text = batch_text.to(device)
                 log.info("Loaded batch text")
