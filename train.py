@@ -77,7 +77,7 @@ def main(course_dir, text_embedding_size, audio_embedding_size, image_embedding_
 
 
     # Load Data Loader
-    train_loader = torch.utils.data.DataLoader(multimodal_dataset, batch_size=batch_size, shuffle=False, num_workers=2, collate_fn=collator)
+    train_loader = torch.utils.data.DataLoader(multimodal_dataset, batch_size=batch_size, shuffle=False, num_workers=1, collate_fn=collator)
 
     # Get sentence embeddings
     # train_text_loader = torch.utils.data.DataLoader(text_dataset, batch_size=batch_size, shuffle=False, num_workers=2, collate_fn=collator, sampler=train_sampler)
@@ -104,8 +104,8 @@ def main(course_dir, text_embedding_size, audio_embedding_size, image_embedding_
     audio_embedding_size = image_embedding_size # TODO : Remove this statement after getting audio features
     word_vectors = torch.load(os.path.join(course_dir, 'temp', 'word_vectors.pt'))
     model = MMBiDAF(hidden_size, word_vectors, text_embedding_size, audio_embedding_size, image_embedding_size, device, drop_prob, max_text_length)
-    if not USE_CPU:
-        model = nn.DataParallel(model, args.gpu_ids)
+    #if not USE_CPU:
+    #    model = nn.DataParallel(model, args.gpu_ids)
     if args.load_path:
         log.info(f'Loading checkpoint from {args.load_path}...')
         model, step = util.load_model(model, args.load_path, device, args.gpu_ids)
@@ -142,17 +142,16 @@ def main(course_dir, text_embedding_size, audio_embedding_size, image_embedding_
         with torch.enable_grad(), tqdm(total=len(train_loader.dataset)) as progress_bar:
             for batch_text, original_text_lengths, batch_images, original_img_lengths, batch_audio, original_audio_lengths, batch_target_indices, original_target_len in train_loader:
                 loss = 0
-                max_dec_len = max(original_target_len)    
-                if not USE_CPU:         
-                    # Transfer tensors to GPU
-                    batch_text = batch_text.to(device)
-                    log.info("Loaded batch text")
-                    batch_audio = batch_audio.to(device)
-                    log.info("Loaded batch audio")
-                    batch_images = batch_images.to(device)
-                    log.info("Loaded batch image")
-                    batch_target_indices = batch_target_indices.to(device)
-                    log.info("Loaded batch targets")
+                max_dec_len = max(original_target_len)        
+                # Transfer tensors to GPU
+                batch_text = batch_text.to(device)
+                log.info("Loaded batch text")
+                batch_audio = batch_audio.to(device)
+                log.info("Loaded batch audio")
+                batch_images = batch_images.to(device)
+                log.info("Loaded batch image")
+                batch_target_indices = batch_target_indices.to(device)
+                log.info("Loaded batch targets")
 
                 # Setup for forward
                 batch_size = batch_text.size(0)
@@ -227,8 +226,8 @@ if __name__ == '__main__':
     drop_prob = 0.2
     max_text_length = 210100   # calculated using a simple script to go over all the transcripts and count tokens in list split by (' ') and ignored filename
     num_epochs = 90
-    batch_size = 3
+    batch_size = 64
     out_heatmaps_dir = '/home/amankhullar/model/output_heatmaps/'
-    USE_CPU = True          # To check if the error being encountered is that of CUDA
+    USE_CPU = False          # To check if the error being encountered is that of CUDA
     args = get_train_args()
     main(course_dir, text_embedding_size, audio_embedding_size, image_embedding_size, hidden_size, drop_prob, max_text_length, out_heatmaps_dir, args, batch_size, num_epochs, USE_CPU)

@@ -135,8 +135,10 @@ class MMBiDAF(nn.Module):
         text_audio_att = self.bidaf_att_audio(text_encoded, audio_encoded, text_mask, audio_mask)   # (batch_size, num_sentences, 8 * hidden_size)
         text_image_att = self.bidaf_att_image(text_encoded, image_encoded, text_mask, image_mask)   # (batch_size, num_sentences, 8 * hidden_size)
 
-        mod_text_audio, text_audio_hidden = self.mod_t_a(text_audio_att, original_text_lengths)                        # (batch_size, num_sentences, 2 * hidden_size
+        mod_text_audio, text_audio_hidden = self.mod_t_a(text_audio_att, original_text_lengths)                        # (batch_size, num_sentences, 2 * hidden_size)
         mod_text_image, text_img_hidden = self.mod_t_i(text_image_att, original_text_lengths)                        # (batch_size, num_sentences, 2 * hidden_size)
+        mod_text_audio = mod_text_audio.to(self.device)
+        mod_text_image = mod_text_image.to(self.device)
 
         # if hidden_gru is None:
         #     hidden_gru = self.multimodal_att_decoder.initHidden()
@@ -164,7 +166,7 @@ class MMBiDAF(nn.Module):
 
         if self.training:          # Teacher forcing
             for idx in range(batch_target_indices.size(1)):
-                out_distribution, decoder_hidden, decoder_cell_state, att_cov_dist, coverage_vec = self.multimodal_att_decoder(decoder_input, decoder_hidden, decoder_cell_state, mod_text_audio, mod_text_image, coverage_vec, decoder_mask) 
+                out_distribution, decoder_hidden, decoder_cell_state, att_cov_dist, coverage_vec = self.multimodal_att_decoder(decoder_input, decoder_hidden, decoder_cell_state, mod_text_audio, mod_text_image, coverage_vec, decoder_mask, self.device) 
 
                 decoder_input = list()
                 for batch_idx in range(batch_target_indices.size(0)):

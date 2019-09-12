@@ -142,7 +142,7 @@ class MultimodalAttentionDecoder(nn.Module):
         self.out = nn.Linear(self.hidden_size, self.output_size)
         self.softmax = nn.Softmax()
 
-    def forward(self, sent_embed, decoder_hidden, decoder_cell_state, text_audio_enc_out, text_img_enc_out, coverage_vec, mask): # sent_embed : (batch, 1, text_embedding_size); decoder_hidden (batch, num_dir * num_layers, hidden_size)
+    def forward(self, sent_embed, decoder_hidden, decoder_cell_state, text_audio_enc_out, text_img_enc_out, coverage_vec, mask, device): # sent_embed : (batch, 1, text_embedding_size); decoder_hidden (batch, num_dir * num_layers, hidden_size)
         # For the text-audio attention
         e1 = self.v1(self.tanh(self.W1(text_audio_enc_out) + self.W2(decoder_hidden) + self.Wc1(coverage_vec))) # (batch, max_seq_len, 1)
         att_weights_1 = F.softmax(e1, dim=1)        # (batch, max_seq_len, 1)
@@ -176,7 +176,10 @@ class MultimodalAttentionDecoder(nn.Module):
         # att_cov_dist = e_beta_1*att_weights_1 + e_beta_2*att_weights_2          # (batch, max_seq_len, 1)
         coverage_vec = coverage_vec + att_cov_dist          # (batch, max_seq_len, 1)
         
-        cat_input = torch.cat((c3.unsqueeze(1), sent_embed), dim=2)        # (batch, 1, 2*hidden_size + text_embedding_size)
+        c3 = c3.to(device)
+        sent_embed = sent_embed.to(device)
+        c3 = c3.unsqueeze(1)
+        cat_input = torch.cat((c3, sent_embed), dim=2)        # (batch, 1, 2*hidden_size + text_embedding_size)
 
         decoder_out, (decoder_hidden, decoder_cell_state) = self.lstm(cat_input, (decoder_hidden.transpose(0,1), decoder_cell_state))                       # (batch, 1, hidden_size)
         decoder_out = decoder_out.view(-1, decoder_out.size(-1))    # (batch*1, hidden_size)
