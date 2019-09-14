@@ -49,6 +49,7 @@ def evaluate(course_dir, hidden_size, text_embedding_size, audio_embedding_size,
     
     device, args.gpu_ids = util.get_available_devices()
     device = torch.device(f'cuda:{args.gpu_ids[-1]}')
+    print("GPU device is : {}".format(device))
 
     if USE_CPU:
         device = torch.device('cpu')    #### TODO : only because GPU is out of memory
@@ -305,12 +306,12 @@ def compute_f1(gen_idxs, batch_target_indices, beam_size=1):
 
 if __name__ == "__main__":
     hidden_size = 100
-    text_embedding_size = 300
-    audio_embedding_size = 128
-    image_embedding_size = 1000
+    text_embedding_size = 100
+    audio_embedding_size = 43
+    image_embedding_size = 2048
     drop_prob = 0.2
-    max_text_length = 409
+    max_text_length = 210100
     args = get_train_args()
-    checkpoint_path = "/home/amankhullar/model/multimodal_bidaf/save/train/temp-21/step_67900.pth.tar"
-    courses_dir = '/home/anish17281/NLP_Dataset/dataset/'
+    checkpoint_path = "/home/aman_khullar/multimodal/MMBiDAF/save/train/temp-05/step_90017.pth.tar"
+    courses_dir = '/home/aman_khullar/how2/'
     evaluate(courses_dir, hidden_size, text_embedding_size, audio_embedding_size, image_embedding_size, drop_prob, max_text_length, args, checkpoint_path)
