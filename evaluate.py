@@ -1,4 +1,5 @@
 import os
+import pickle
 import re
 import sys
 import numpy as np
@@ -120,12 +121,10 @@ def evaluate(course_dir, hidden_size, text_embedding_size, audio_embedding_size,
 
             print('Generated summaries for batch {}: '.format(batch_idx))
             print(summaries)
-            print("Reached here")
-            sys.exit()
 
             try:
-                # Calculate Rouge score for the current batch
-                all_scrores = compute_rouge(summaries, batch_target_indices, beam_size=1) # tuple of all scores
+            # Calculate Rouge score for the current batch
+                all_scrores = compute_rouge(summaries, batch_target_indices, idx_word_path, beam_size=1) # tuple of all scores
                 for idx, score in enumerate(all_scrores):
                     total_scores[idx] += score
 
@@ -184,7 +183,7 @@ def greedy_search(out_distributions, original_text_length, idx_word_path):
         gen_idxs.append(word_idx)
         # Setting the generated sentence's prob to zero in the remaining timesteps - coverage?
         # out_distributions[:, max_prob_idx] = 0
-    ' '.join(generated_summary)
+    generated_summary = ' '.join(generated_summary)
     return generated_summary, gen_idxs
 
 def beam_search(out_distributions, original_text_length, source_path, k=5):
@@ -223,18 +222,10 @@ def get_source_sentence(source_path, idx):
     lines = []
     try:
         with open(source_path, 'rb') as f:
-#             for line in f:
-#                     if re.match(r'\d+:\d+', line) is None:
-#                         line = line.replace('[MUSIC]', '')
-#                         lines.append(line.strip())
             source_file = pickle.load(f)
     except Exception as e:
         logging.error('Unable to open file. Exception: ' + str(e))
     else:
-        # print("Idx is  : {}".format(idx))
-#         source_text = ' '.join(lines)
-#         source_sentences = sent_tokenize(source_text)
-        # print("length of source sentences is : {}".format(len(source_sentences)))
         source_sentences = [sent[0] for sent in source_file]
 #         for i in range(len(source_sentences)):
 #             source_sentences[i] = source_sentences[i].lower()
@@ -245,8 +236,8 @@ def get_source_sentence(source_path, idx):
         return source_sentences[idx]
 
 def prepare(gt, res):
-#     clean_gt = [" ".join([stemmer.stem(i) for i in line.split()]) for line in gt]
-#     clean_res = [" ".join([stemmer.stem(i) for i in line.split()]) for line in res]
+    clean_gt = [" ".join([stemmer.stem(i) for i in line.split()]) for line in gt]
+    clean_res = [" ".join([stemmer.stem(i) for i in line.split()]) for line in res]
     return gt, res
 
 def get_rouge(clean_gt, clean_res):
@@ -254,29 +245,30 @@ def get_rouge(clean_gt, clean_res):
     scores = rouge.get_scores(clean_res, clean_gt, avg=True)
     return scores
 
-def compute_rouge(summaries, batch_target_indices, beam_size=1):
+def get_target_sum(batch_target_indices, idx_word_path):
+    try:
+        with open(idx_word_path, 'rb') as f:
+            idx_word_dict = pickle.load(f)
+    except Exception as e:
+        print("Could not load idx_word dictionary with error : " + e)
+        sys.exit()
+    gt_smry = []
+    for word_idx in batch_target_indices:
+        word = idx_word_dict[int(word_idx)]
+        if word != '<OOV>' and word != '<START>' and word != '<END>':
+            gt_smry.append(idx_word_dict[int(word_idx)])
+    gt_smry = ' '.join(gt_smry)
+    return gt_smry
+
+def compute_rouge(summaries, batch_target_indices, idx_word_path, beam_size=1):
     total_score_r1p = total_score_r1r = total_score_r1f = total_score_r2p = \
     total_score_r2r = total_score_r2f = total_score_rlp = total_score_rlr = total_score_rlf = 0
     batch_count = len(summaries)
+    print("Summaries is : {}".format(summaries))
     for batch_idx, batch_val in enumerate(summaries):
-        try:
-            gt_data = []
-            with open(batch_target_indices[batch_idx], 'r') as f:
-                for line in f:
-                    if re.match(r'\d+:\d+', line) is None:
-                        line = line.replace('[MUSIC]', '')
-                        line = line.lower()
-                        gt_data.append(line.strip())
-        except Exception as e:
-            print("Cannot open files with error : "+ str(e))
-#         print("Generated summary is : {}".format(summaries))
-#         print("Ground truth is : {}".format(gt_data))
-        summaries = [item for sublist in summaries for item in sublist]
+        gt_summary = get_target_sum(batch_target_indices[batch_idx], idx_word_path)
         res_data = batch_val[beam_size-1]
-        min_len = min(len(gt_data), len(res_data))
-        gt_data = gt_data[:min_len]
-        res_data = res_data[:min_len]
-        clean_gt, clean_res = prepare(gt_data, res_data)
+        clean_gt, clean_res = prepare(gt_summary, res_data)
         score = get_rouge(clean_gt, clean_res)
         total_score_r1p += score['rouge-1']['p']
         total_score_r1r += score['rouge-1']['r']
@@ -287,7 +279,6 @@ def compute_rouge(summaries, batch_target_indices, beam_size=1):
         total_score_rlp += score['rouge-l']['p']
         total_score_rlr += score['rouge-l']['r']
         total_score_rlf += score['rouge-l']['f']
-    
     return (total_score_r1p/batch_count, total_score_r1r/batch_count, total_score_r1f/batch_count, \
         total_score_r2p/batch_count, total_score_r2r/batch_count, total_score_r2f/batch_count, \
         total_score_rlp/batch_count, total_score_rlr/batch_count, total_score_rlf/batch_count)
@@ -315,3 +306,4 @@ if __name__ == "__main__":
     checkpoint_path = "/home/aman_khullar/multimodal/MMBiDAF/save/train/temp-05/step_90017.pth.tar"
     courses_dir = '/home/aman_khullar/how2/'
     evaluate(courses_dir, hidden_size, text_embedding_size, audio_embedding_size, image_embedding_size, drop_prob, max_text_length, args, checkpoint_path)
+
