@@ -30,7 +30,7 @@ from nltk.tokenize import sent_tokenize
 
 import util
 from args import get_train_args
-from evaluate import get_generated_summaries
+from evaluate import evaluate
 
 def main(course_dir, text_embedding_size, audio_embedding_size, image_embedding_size, hidden_size, drop_prob, max_text_length, out_heatmaps_dir, args, batch_size=3, num_epochs=100, USE_CPU=False):
     # Set up logging and devices
@@ -141,6 +141,7 @@ def main(course_dir, text_embedding_size, audio_embedding_size, image_embedding_
         loss_epoch = 0
         with torch.enable_grad(), tqdm(total=len(train_loader.dataset)) as progress_bar:
             for batch_text, original_text_lengths, batch_images, original_img_lengths, batch_audio, original_audio_lengths, batch_target_indices, original_target_len in train_loader:
+                count_item += 1
                 loss = 0
                 max_dec_len = max(original_target_len)        
                 # Transfer tensors to GPU
@@ -189,11 +190,15 @@ def main(course_dir, text_embedding_size, audio_embedding_size, image_embedding_
                     # Evaluate and save checkpoint
                     log.info(f'Evaluating at step {step}...')
                     ema.assign(model)
-                    # TODO
-                    # scores, results = evaluate(model, dev_loader, device,
-                    #                               args.dev_eval_file,
-                    #                               args.max_ans_len,
-                    #                               args.use_squad_v2)
+                    model.eval()
+                    
+                    # Evaluate the model on the training set
+                    evaluate.evaluate(course_dir, hidden_size, text_embedding_size, audio_embedding_size,\
+                        image_embedding_size, drop_prob, max_text_length, args, checkpoicnt_path='', batch_size=1,\
+                        model=model, test_text_loader=val_text_loader, test_audio_loader=val_audio_loader,\
+                        test_image_loader=val_image_loader, test_target_loader=val_target_loader)
+
+                    model.train()
                     saver.save(step, model, device)
                     ema.resume(model)
 
@@ -226,7 +231,7 @@ if __name__ == '__main__':
     drop_prob = 0.2
     max_text_length = 210100   # calculated using a simple script to go over all the transcripts and count tokens in list split by (' ') and ignored filename
     num_epochs = 90
-    batch_size = 64
+    batch_size = 3
     out_heatmaps_dir = '/home/amankhullar/model/output_heatmaps/'
     USE_CPU = False          # To check if the error being encountered is that of CUDA
     args = get_train_args()

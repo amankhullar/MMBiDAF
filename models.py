@@ -186,7 +186,7 @@ class MMBiDAF(nn.Module):
 
         else:           # Evaluation time of the decoder
             for idx in range(max_dec_len):           
-                out_distribution, decoder_hidden, decoder_cell_state, att_cov_dist, coverage_vec = self.multimodal_att_decoder(decoder_input, decoder_hidden, decoder_cell_state, mod_text_audio, mod_text_image, coverage_vec, decoder_mask)
+                out_distribution, decoder_hidden, decoder_cell_state, att_cov_dist, coverage_vec = self.multimodal_att_decoder(decoder_input, decoder_hidden, decoder_cell_state, mod_text_audio, mod_text_image, coverage_vec, decoder_mask, self.device)
                 _, max_prob_idx = torch.max(out_distribution, 1)
                 decoder_input = list()
                 for batch_idx in range(text_emb.size(0)):

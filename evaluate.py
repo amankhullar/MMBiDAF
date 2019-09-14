@@ -40,20 +40,21 @@ def get_indices(dataset):
     train_indices, _ = gen_train_val_indices(dataset)
     return train_indices
 
-def evaluate(courses_dir, hidden_size, text_embedding_size, audio_embedding_size, image_embedding_size, drop_prob, max_text_length, args, checkpoint_path, batch_size=1):
+def evaluate(course_dir, hidden_size, text_embedding_size, audio_embedding_size, image_embedding_size, drop_prob, max_text_length, args, checkpoint_path, batch_size=1,\
+             model=None, test_text_loader=None, test_audio_loader=None, test_image_loader=None, test_target_loader=None):
     # Set up logging and devices
     args.save_dir = util.get_save_dir(args.save_dir, args.name, training=False)
     log = util.get_logger(args.save_dir, args.name)
     log.info(f'Args: {dumps(vars(args), indent=4, sort_keys=True)}')
     
-    device, gpu_ids = util.get_available_devices()
+    device, args.gpu_ids = util.get_available_devices()
+    device = torch.device(f'cuda:{args.gpu_ids[-1]}')
 
     if USE_CPU:
         device = torch.device('cpu')    #### TODO : only because GPU is out of memory
-        gpu_ids = None    #### TODO : Gpu out of memory
+        args.gpu_ids = []    #### TODO : Gpu out of memory
     
-    if gpu_ids is not None:
-        args.batch_size *= max(1, len(gpu_ids))
+    args.batch_size *= max(1, len(args.gpu_ids))
 
     # Set random seed
     log.info(f'Using random seed {args.seed}...')
@@ -61,53 +62,39 @@ def evaluate(courses_dir, hidden_size, text_embedding_size, audio_embedding_size
     torch.manual_seed(args.seed)
     torch.cuda.manual_seed_all(args.seed)
 
-    model = MMBiDAF(hidden_size, text_embedding_size, audio_embedding_size, image_embedding_size, device, drop_prob, max_text_length)
-    model = nn.DataParallel(model, gpu_ids)
-    
-    log.info(f'Loading checkpoint from {args.load_path}...')
-    model = util.load_model(model, checkpoint_path, device, gpu_ids, return_step=False)
-    model = model.to(device)
-    model.eval()
-    # the loading is being performed in the train.py file as well
+    # Create Test Dataset objects
+    train_text_path = os.path.join(course_dir, 'text', 'sum_devtest', 'tran.tok.txt')
+    gt_path = os.path.join(course_dir, 'text', 'sum_devtest', 'desc.tok.txt')
+    word_idx_path = os.path.join(course_dir, 'temp', 'word_idx.pkl')
+    idx_word_path = os.path.join(course_dir, 'temp', 'idx_word.pkl')
+    vid_feat_path = os.path.join(course_dir, 'video_action_features')
+    aud_feat_path = os.path.join(course_dir, 'audio_feat')      # TODO : check path
+    multimodal_dataset = MultimodalDataset(train_text_path, gt_path, word_idx_path, vid_feat_path, vid_feat_path, max_text_length)        # TODO : add the audio features instead of video features
 
-    # model = load_model(model, checkpoint_path, args.gpu_ids)
-    print("Model Loaded")
+    if model == None:
+        audio_embedding_size = image_embedding_size # TODO : Remove this statement after getting audio features
+        word_vectors = torch.load(os.path.join(course_dir, 'temp', 'word_vectors.pt'))
+        model = MMBiDAF(hidden_size, word_vectors, text_embedding_size, audio_embedding_size, image_embedding_size, device, drop_prob, max_text_length)
+    #model = nn.DataParallel(model, gpu_ids)
+    
+        log.info(f'Loading checkpoint from {args.load_path}...')
+        model = util.load_model(model, checkpoint_path, device, args.gpu_ids, return_step=False)
+        model = model.to(device)
+        model.eval()
+        # the loading is being performed in the train.py file as well
+
+        # model = load_model(model, checkpoint_path, args.gpu_ids)
+        print("Model Loaded")
 #     print(model)
 
-    # Create Dataset objects
-    text_dataset = TextDataset(courses_dir, max_text_length)
-    audio_dataset = AudioDataset(courses_dir)
-    target_dataset = TargetDataset(courses_dir)
-    # Preprocess the image in prescribed format
-    normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-    transform = transforms.Compose([transforms.RandomResizedCrop(256), transforms.RandomHorizontalFlip(), transforms.ToTensor(), normalize,])
-    image_dataset = ImageDataset(courses_dir, transform)
-
-    # Creating data indices for training and validation splits:
-    test_indices = get_indices(text_dataset)
-
-    # Creating PT data sampler and loaders:
-    test_sampler = torch.utils.data.SequentialSampler(test_indices)
-
-    # Get sentence embeddings
-    test_text_loader = torch.utils.data.DataLoader(text_dataset, batch_size=batch_size, shuffle=False, num_workers=2, collate_fn=collator, sampler=test_sampler)
-
-    # Get Audio embeddings
-    test_audio_loader = torch.utils.data.DataLoader(audio_dataset, batch_size=batch_size, shuffle=False, num_workers=2, collate_fn=collator, sampler=test_sampler)
-
-    # Get images
-    test_image_loader = torch.utils.data.DataLoader(image_dataset, batch_size=batch_size, shuffle=False, num_workers=2, collate_fn=collator, sampler=test_sampler)
-
-    # Load Target text
-    test_target_loader = torch.utils.data.DataLoader(target_dataset, batch_size=batch_size, shuffle=False, num_workers=2, collate_fn=target_collator, sampler=test_sampler)
+    # Load Data Loader
+    test_loader = torch.utils.data.DataLoader(multimodal_dataset, batch_size=batch_size, shuffle=False, num_workers=1, collate_fn=collator)
 
     batch_idx = 0
     total_scores = [0]*9        # in order of 'p' 'r' and 'f' for r1, r2, rl
     f1_score = 0
-    with torch.no_grad():
-        for (batch_text, original_text_lengths), (batch_audio, original_audio_lengths), (batch_images, original_img_lengths), \
-            (batch_target_indices, batch_source_paths, batch_target_paths, original_target_len) \
-            in zip(test_text_loader, test_audio_loader, test_image_loader, test_target_loader):
+    with torch.no_grad(), tqdm(total=len(test_loader.dataset)) as progress_bar:
+        for batch_text, original_text_lengths, batch_images, original_img_lengths, batch_audio, original_audio_lengths, batch_target_indices, original_target_len in test_loader:
             batch_idx += 1
 
             max_dec_len = max(original_target_len)             # TODO check error : max decoder timesteps for each batch 
@@ -128,21 +115,16 @@ def evaluate(courses_dir, hidden_size, text_embedding_size, audio_embedding_size
             # Generate summary for current batch
             log.info("\n\nGenerating summaries for batch {}\n".format(batch_idx))
 
-            ###### FOR TESTING ##########
-#             print(batch_source_paths)
-#             print(type(batch_source_paths))
-            batch_source_paths = list(batch_source_paths)
-            for idx in range(len(batch_source_paths)):
-                batch_source_paths[idx] = batch_source_paths[idx].replace('sentence_features3', 'processed_transcripts').replace('.pt', '.p')
-#             print(batch_source_paths)
-            summaries, gen_idxs = get_generated_summaries(batch_out_distributions, original_text_lengths, batch_source_paths) # (batch_size, beam_size, sents)
+            summaries, gen_idxs = get_generated_summaries(batch_out_distributions, original_text_lengths, idx_word_path) # (batch_size, beam_size, sents)
 
             print('Generated summaries for batch {}: '.format(batch_idx))
             print(summaries)
+            print("Reached here")
+            sys.exit()
 
             try:
                 # Calculate Rouge score for the current batch
-                all_scrores = compute_rouge(summaries, batch_target_paths, beam_size=1) # tuple of all scores
+                all_scrores = compute_rouge(summaries, batch_target_indices, beam_size=1) # tuple of all scores
                 for idx, score in enumerate(all_scrores):
                     total_scores[idx] += score
 
@@ -164,7 +146,7 @@ def evaluate(courses_dir, hidden_size, text_embedding_size, audio_embedding_size
         print("Average Rouge score on the data is : {}".format(total_scores))
         print("Average F1 score on the data is : {}".format(f1_score))
 
-def get_generated_summaries(batch_out_distributions, original_text_lengths, batch_source_paths, method='greedy', k=5):
+def get_generated_summaries(batch_out_distributions, original_text_lengths, idx_word_path, method='greedy', k=5):
     batch_out_distributions = np.array([dist.cpu().detach().numpy() for dist in batch_out_distributions])
     generated_summaries = []
     gen_idxs = []
@@ -172,9 +154,9 @@ def get_generated_summaries(batch_out_distributions, original_text_lengths, batc
         out_distributions = batch_out_distributions[batch_idx, :, :]
 
         if method == 'beam':
-            summaries, idxs = beam_search(out_distributions, original_text_lengths[batch_idx], batch_source_paths[batch_idx], k=k)
+            summaries, idxs = beam_search(out_distributions, original_text_lengths[batch_idx], idx_word_path, k=k)
         else:
-            generated_summary, idxs = greedy_search(out_distributions, original_text_lengths[batch_idx], batch_source_paths[batch_idx])
+            generated_summary, idxs = greedy_search(out_distributions, original_text_lengths[batch_idx], idx_word_path)
             summaries = [generated_summary]
             idxs = [idxs]
         generated_summaries.append(summaries)
@@ -182,23 +164,26 @@ def get_generated_summaries(batch_out_distributions, original_text_lengths, batc
 
     return generated_summaries, gen_idxs
 
-def greedy_search(out_distributions, original_text_length, source_path):
+def greedy_search(out_distributions, original_text_length, idx_word_path):
     generated_summary = []
     gen_idxs = []
     for probs in out_distributions: # Looping over timesteps
-        if(original_text_length - 1 == np.argmax(probs)): # EOS
+        word_idx = np.argmax(probs, 0)
+        try:
+            with open(idx_word_path, 'rb') as f:
+                word_idx_dict = pickle.load(f)
+                word = word_idx_dict[word_idx]
+        except Exception as e:
+            print("Could not load idx to word file with exception as : " + str(e))
+            sys.exit()
+        if word == '<END>':
             break
-        # print("Length of original text is : {}".format(original_text_length - 1))
-        max_prob_idx = np.argmax(probs, 0)
-        # print("Max_prob_idx = " + str(max_prob_idx))
-        sent = get_source_sentence(source_path, max_prob_idx)
-        if sent == 0:
-            break
-        elif sent != None:
-            generated_summary.append(sent)
-            gen_idxs.append(max_prob_idx)
+        if word != '<START>':
+            generated_summary.append(word)
+        gen_idxs.append(word_idx)
         # Setting the generated sentence's prob to zero in the remaining timesteps - coverage?
         # out_distributions[:, max_prob_idx] = 0
+    ' '.join(generated_summary)
     return generated_summary, gen_idxs
 
 def beam_search(out_distributions, original_text_length, source_path, k=5):
@@ -268,14 +253,14 @@ def get_rouge(clean_gt, clean_res):
     scores = rouge.get_scores(clean_res, clean_gt, avg=True)
     return scores
 
-def compute_rouge(summaries, batch_target_paths, beam_size=1):
+def compute_rouge(summaries, batch_target_indices, beam_size=1):
     total_score_r1p = total_score_r1r = total_score_r1f = total_score_r2p = \
     total_score_r2r = total_score_r2f = total_score_rlp = total_score_rlr = total_score_rlf = 0
     batch_count = len(summaries)
     for batch_idx, batch_val in enumerate(summaries):
         try:
             gt_data = []
-            with open(batch_target_paths[batch_idx], 'r') as f:
+            with open(batch_target_indices[batch_idx], 'r') as f:
                 for line in f:
                     if re.match(r'\d+:\d+', line) is None:
                         line = line.replace('[MUSIC]', '')
