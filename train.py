@@ -28,11 +28,11 @@ from tqdm import tqdm
 from ujson import load as json_load
 from nltk.tokenize import sent_tokenize
 
+import evaluate
 import util
 from args import get_train_args
-from evaluate import evaluate
 
-def main(course_dir, text_embedding_size, audio_embedding_size, image_embedding_size, hidden_size, drop_prob, max_text_length, out_heatmaps_dir, args, batch_size=3, num_epochs=100, USE_CPU=False):
+def main(course_dir, text_embedding_size, audio_embedding_size, image_embedding_size, hidden_size, drop_prob, max_text_length, out_heatmaps_dir, args, checkpoint_path=None, batch_size=3, num_epochs=100, USE_CPU=False):
     # Set up logging and devices
     args.save_dir = util.get_save_dir(args.save_dir, args.name, training=True)
     log = util.get_logger(args.save_dir, args.name)
@@ -103,7 +103,10 @@ def main(course_dir, text_embedding_size, audio_embedding_size, image_embedding_
     # Create model
     audio_embedding_size = image_embedding_size # TODO : Remove this statement after getting audio features
     word_vectors = torch.load(os.path.join(course_dir, 'temp', 'word_vectors.pt'))
-    model = MMBiDAF(hidden_size, word_vectors, text_embedding_size, audio_embedding_size, image_embedding_size, device, drop_prob, max_text_length)
+    if checkpoint_path == None:
+        model = MMBiDAF(hidden_size, word_vectors, text_embedding_size, audio_embedding_size, image_embedding_size, device, drop_prob, max_text_length)
+    else:
+        model = util.load_model(model, checkpoint_path, device, args.gpu_ids, return_step=False)
     #if not USE_CPU:
     #    model = nn.DataParallel(model, args.gpu_ids)
     if args.load_path:
@@ -194,9 +197,8 @@ def main(course_dir, text_embedding_size, audio_embedding_size, image_embedding_
                     
                     # Evaluate the model on the training set
                     evaluate.evaluate(course_dir, hidden_size, text_embedding_size, audio_embedding_size,\
-                        image_embedding_size, drop_prob, max_text_length, args, checkpoicnt_path='', batch_size=1,\
-                        model=model, test_text_loader=val_text_loader, test_audio_loader=val_audio_loader,\
-                        test_image_loader=val_image_loader, test_target_loader=val_target_loader)
+                        image_embedding_size, drop_prob, max_text_length, args, checkpoint_path='', batch_size=1,\
+                        model=model)
 
                     model.train()
                     saver.save(step, model, device)
@@ -224,6 +226,7 @@ def main(course_dir, text_embedding_size, audio_embedding_size, image_embedding_
 
 if __name__ == '__main__':
     course_dir = '/home/aman_khullar/how2/'
+    checkpoint_path = "/home/aman_khullar/multimodal/MMBiDAF/save/train/temp-05/step_90017.pth.tar"
     text_embedding_size = 100
     audio_embedding_size = 43
     image_embedding_size = 2048
@@ -235,4 +238,4 @@ if __name__ == '__main__':
     out_heatmaps_dir = '/home/amankhullar/model/output_heatmaps/'
     USE_CPU = False          # To check if the error being encountered is that of CUDA
     args = get_train_args()
-    main(course_dir, text_embedding_size, audio_embedding_size, image_embedding_size, hidden_size, drop_prob, max_text_length, out_heatmaps_dir, args, batch_size, num_epochs, USE_CPU)
+    main(course_dir, text_embedding_size, audio_embedding_size, image_embedding_size, hidden_size, drop_prob, max_text_length, out_heatmaps_dir, args, checkpoint_path, batch_size, num_epochs, USE_CPU)

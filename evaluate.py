@@ -41,8 +41,8 @@ def get_indices(dataset):
     train_indices, _ = gen_train_val_indices(dataset)
     return train_indices
 
-def evaluate(course_dir, hidden_size, text_embedding_size, audio_embedding_size, image_embedding_size, drop_prob, max_text_length, args, checkpoint_path, batch_size=1,\
-             model=None, test_text_loader=None, test_audio_loader=None, test_image_loader=None, test_target_loader=None):
+def evaluate(course_dir, hidden_size, text_embedding_size, audio_embedding_size, image_embedding_size, drop_prob,\
+    max_text_length, args, checkpoint_path, batch_size=1, model=None):
     # Set up logging and devices
     args.save_dir = util.get_save_dir(args.save_dir, args.name, training=False)
     log = util.get_logger(args.save_dir, args.name)
@@ -306,4 +306,3 @@ if __name__ == "__main__":
     checkpoint_path = "/home/aman_khullar/multimodal/MMBiDAF/save/train/temp-05/step_90017.pth.tar"
     courses_dir = '/home/aman_khullar/how2/'
     evaluate(courses_dir, hidden_size, text_embedding_size, audio_embedding_size, image_embedding_size, drop_prob, max_text_length, args, checkpoint_path)
-
