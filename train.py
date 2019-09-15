@@ -103,9 +103,8 @@ def main(course_dir, text_embedding_size, audio_embedding_size, image_embedding_
     # Create model
     audio_embedding_size = image_embedding_size # TODO : Remove this statement after getting audio features
     word_vectors = torch.load(os.path.join(course_dir, 'temp', 'word_vectors.pt'))
-    if checkpoint_path == None:
-        model = MMBiDAF(hidden_size, word_vectors, text_embedding_size, audio_embedding_size, image_embedding_size, device, drop_prob, max_text_length)
-    else:
+    model = MMBiDAF(hidden_size, word_vectors, text_embedding_size, audio_embedding_size, image_embedding_size, device, drop_prob, max_text_length)
+    if checkpoint_path != None:
         model = util.load_model(model, checkpoint_path, device, args.gpu_ids, return_step=False)
     #if not USE_CPU:
     #    model = nn.DataParallel(model, args.gpu_ids)
@@ -193,14 +192,14 @@ def main(course_dir, text_embedding_size, audio_embedding_size, image_embedding_
                     # Evaluate and save checkpoint
                     log.info(f'Evaluating at step {step}...')
                     ema.assign(model)
-                    model.eval()
+                    #model.eval()
                     
                     # Evaluate the model on the training set
-                    evaluate.evaluate(course_dir, hidden_size, text_embedding_size, audio_embedding_size,\
-                        image_embedding_size, drop_prob, max_text_length, args, checkpoint_path='', batch_size=1,\
-                        model=model)
+                    #evaluate.evaluate(course_dir, hidden_size, text_embedding_size, audio_embedding_size,\
+                    #    image_embedding_size, drop_prob, max_text_length, args, checkpoint_path='', batch_size=1,\
+                    #    model=model)
 
-                    model.train()
+                    #model.train()
                     saver.save(step, model, device)
                     ema.resume(model)
 
@@ -226,7 +225,7 @@ def main(course_dir, text_embedding_size, audio_embedding_size, image_embedding_
 
 if __name__ == '__main__':
     course_dir = '/home/aman_khullar/how2/'
-    checkpoint_path = "/home/aman_khullar/multimodal/MMBiDAF/save/train/temp-05/step_90017.pth.tar"
+    checkpoint_path = "/home/aman_khullar/multimodal/MMBiDAF/save/train/temp-05/step_340064.pth.tar"
     text_embedding_size = 100
     audio_embedding_size = 43
     image_embedding_size = 2048
