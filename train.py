@@ -32,7 +32,7 @@ import evaluate
 import util
 from args import get_train_args
 
-def main(course_dir, text_embedding_size, audio_embedding_size, image_embedding_size, hidden_size, drop_prob, max_text_length, out_heatmaps_dir, args, checkpoint_path=None, batch_size=3, num_epochs=100, USE_CPU=False):
+def main(course_dir, text_embedding_size, audio_embedding_size, image_embedding_size, hidden_size, drop_prob, max_text_length, out_heatmaps_dir, args, checkpoint_path=None, batch_size=3, num_epochs=100, USE_CPU=False, SINGLE=False):
     # Set up logging and devices
     args.save_dir = util.get_save_dir(args.save_dir, args.name, training=True)
     log = util.get_logger(args.save_dir, args.name)
@@ -203,6 +203,8 @@ def main(course_dir, text_embedding_size, audio_embedding_size, image_embedding_
                     saver.save(step, model, device)
                     ema.resume(model)
 
+                if SINGLE:
+                    break
                 # Generate summary
                 # print('Generated summary for iteration {}: '.format(epoch))
                 # summaries = get_generated_summaries(batch_out_distributions, original_text_lengths, batch_source_paths)
@@ -236,5 +238,6 @@ if __name__ == '__main__':
     batch_size = 3
     out_heatmaps_dir = '/home/amankhullar/model/output_heatmaps/'
     USE_CPU = False          # To check if the error being encountered is that of CUDA
+    SINGLE = True
     args = get_train_args()
-    main(course_dir, text_embedding_size, audio_embedding_size, image_embedding_size, hidden_size, drop_prob, max_text_length, out_heatmaps_dir, args, checkpoint_path, batch_size, num_epochs, USE_CPU)
+    main(course_dir, text_embedding_size, audio_embedding_size, image_embedding_size, hidden_size, drop_prob, max_text_length, out_heatmaps_dir, args, checkpoint_path, batch_size, num_epochs, USE_CPU, SINGLE)
