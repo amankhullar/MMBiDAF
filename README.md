@@ -14,12 +14,12 @@ The MultiModal Bidirectional Attention Flow (MMBiDAF) model (Figure) is the prop
 attention later on top of **image-aware** and **audio-aware** texts to get an output distribution over the source document. The model is used for **extractive summarization** in which at each timestep the most probable sentences are selected and chosen as part of the output summary. The summary terminates when the probability of a special (\<End Of Summary>) token is the greatest. The proposed model is inherently a combination of Bidirectional Attention Flow and Multimodal Attention models. 
 
 Our model follows the high-level structure of :
->1. Embedding Layer
->2. Encoder Layer
->3. Bidirectional Attention Layer
->4. Modality Aware Sequence Sequence Modeling Layer
->5. Multimodal Attention Layer 
->6. Output Layer.
+1. Embedding Layer
+2. Encoder Layer
+3. Bidirectional Attention Layer
+4. Modality Aware Sequence Sequence Modeling Layer
+5. Multimodal Attention Layer 
+6. Output Layer.
 
 ## Datasets
 
